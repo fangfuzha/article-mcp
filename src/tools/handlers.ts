@@ -266,41 +266,41 @@ async function handleGetReferences(
   const doiIdentifier = resolved.doi ?? (idType === "doi" ? args.identifier : null);
   const sourceList = args.sources?.length ? args.sources : ["europe_pmc", "crossref", "pubmed"];
   const referencesBySource: Record<string, unknown[]> = {};
+  let crossrefReferences: unknown[] = [];
+  let pubmedReferences: unknown[] = [];
+  let europePmcReferences: unknown[] = [];
 
-  await Promise.all(
-    sourceList.map(async (source) => {
-      if (source === "crossref" && doiIdentifier) {
-        const result = await services.crossref.getReferencesAsync(doiIdentifier, args.max_results);
-        if (result.references?.length) {
-          referencesBySource[source] = result.references;
-        }
-      } else if (source === "pubmed" && idType === "pmid") {
-        const result = await services.pubmed.getCitingArticlesAsync(
-          args.identifier,
-          undefined,
-          args.max_results,
-        );
-        if (result.citing_articles?.length) {
-          referencesBySource[source] = result.citing_articles;
-        }
-      } else if (source === "europe_pmc" && doiIdentifier) {
-        const result = await services.europePmc.searchBatchDoiAsync([doiIdentifier]);
-        if (result.length) {
-          referencesBySource[source] = result.map((item) => ({
-            title: item.title,
-            authors: item.authorString ? String(item.authorString).split(",") : [],
-            journal: item.journalInfo?.journal?.title,
-            publication_date: item.firstPublicationDate,
-            doi: item.doi,
-            pmid: item.pmid,
-            pmcid: item.pmcid,
-            abstract: item.abstractText,
-            source: "europe_pmc",
-          }));
-        }
-      }
-    }),
-  );
+  if (sourceList.includes("crossref") && doiIdentifier) {
+    const result = await services.crossref.getReferencesAsync(doiIdentifier, args.max_results);
+    crossrefReferences = Array.isArray(result.references) ? result.references : [];
+  }
+
+  if (sourceList.includes("pubmed") && idType === "pmid") {
+    const result = await services.pubmed.getCitingArticlesAsync(
+      args.identifier,
+      undefined,
+      args.max_results,
+    );
+    pubmedReferences = Array.isArray(result.citing_articles) ? result.citing_articles : [];
+  }
+
+  if (sourceList.includes("europe_pmc") && crossrefReferences.length) {
+    const referenceDois = uniqueReferenceDois(crossrefReferences).slice(0, args.max_results);
+    const result = referenceDois.length
+      ? await services.europePmc.searchBatchDoiAsync(referenceDois)
+      : [];
+    europePmcReferences = result.map(formatEuropePmcReference);
+  }
+
+  if (europePmcReferences.length) {
+    referencesBySource.europe_pmc = europePmcReferences;
+  }
+  if (pubmedReferences.length) {
+    referencesBySource.pubmed = pubmedReferences;
+  }
+  if (crossrefReferences.length) {
+    referencesBySource.crossref = crossrefReferences;
+  }
 
   const mergedReferences = mergeReferences(referencesBySource, args.include_metadata).slice(
     0,
@@ -516,6 +516,56 @@ function selectFulltextContent(fulltext: Record<string, unknown>, format: string
 }
 
 /**
+ * Formats a Europe PMC article record as reference metadata.
+ *
+ * @param item Raw Europe PMC article record.
+ * @returns Normalized reference metadata.
+ */
+function formatEuropePmcReference(item: Record<string, unknown>): Record<string, unknown> {
+  return {
+    title: item.title,
+    authors: item.authorString ? String(item.authorString).split(",") : [],
+    journal: isRecord(item.journalInfo)
+      ? (item.journalInfo.journal as Record<string, unknown> | undefined)?.title
+      : undefined,
+    publication_date: item.firstPublicationDate,
+    doi: item.doi,
+    pmid: item.pmid,
+    pmcid: item.pmcid,
+    abstract: item.abstractText,
+    source: "europe_pmc",
+  };
+}
+
+/**
+ * Extracts unique DOI values from references while preserving first-seen order.
+ *
+ * @param references Reference records from upstream sources.
+ * @returns Unique DOI values.
+ */
+function uniqueReferenceDois(references: unknown[]): string[] {
+  const seen = new Set<string>();
+  const dois: string[] = [];
+
+  for (const reference of references) {
+    if (!isRecord(reference)) {
+      continue;
+    }
+
+    const doi = String(reference.doi ?? reference.DOI ?? "").trim();
+    const normalizedDoi = doi.toLowerCase();
+    if (!doi || seen.has(normalizedDoi)) {
+      continue;
+    }
+
+    seen.add(normalizedDoi);
+    dois.push(doi);
+  }
+
+  return dois;
+}
+
+/**
  * Maps items with a maximum number of in-flight async tasks.
  *
  * @param items Items to process.
@@ -692,8 +742,7 @@ function mergeReferences(
   referencesBySource: Record<string, unknown[]>,
   includeMetadata: boolean,
 ): Array<Record<string, unknown>> {
-  const merged: Array<Record<string, unknown>> = [];
-  const seen = new Set<string>();
+  const mergedByKey = new Map<string, Record<string, unknown>>();
   const sourcePriority: Record<string, number> = { europe_pmc: 1, pubmed: 2, crossref: 3 };
 
   for (const [source, references] of Object.entries(referencesBySource)) {
@@ -706,11 +755,7 @@ function mergeReferences(
         .trim()
         .toLowerCase()
         .replace(/\s+/g, " ");
-      const key = doi ? `doi:${doi}` : title ? `title:${title}` : `${source}:${merged.length}`;
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
+      const key = doi ? `doi:${doi}` : title ? `title:${title}` : `${source}:${mergedByKey.size}`;
 
       const standardReference: Record<string, unknown> = {
         title: reference.title ?? "",
@@ -731,11 +776,17 @@ function mergeReferences(
         standardReference.publisher = reference.publisher ?? "";
       }
 
-      merged.push(standardReference);
+      const existing = mergedByKey.get(key);
+      const existingPriority = sourcePriority[String(existing?.source)] ?? Number.MAX_SAFE_INTEGER;
+      const currentPriority = sourcePriority[source] ?? Number.MAX_SAFE_INTEGER;
+
+      if (!existing || currentPriority < existingPriority) {
+        mergedByKey.set(key, standardReference);
+      }
     }
   }
 
-  return merged.sort(
+  return Array.from(mergedByKey.values()).sort(
     (left, right) =>
       (sourcePriority[String(left.source)] ?? 4) - (sourcePriority[String(right.source)] ?? 4),
   );

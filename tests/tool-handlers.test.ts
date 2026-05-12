@@ -345,7 +345,55 @@ describe("tool handlers", () => {
     expect(result.success).toBe(true);
     expect(result.merged_references).toHaveLength(2);
     expect(result.merged_references[0].doi).toBe("10.1000/ref-a");
+    expect(result.merged_references[0].source).toBe("europe_pmc");
     expect(result.merged_references[0]).not.toHaveProperty("abstract");
+  });
+
+  it("enriches CrossRef references with Europe PMC metadata", async () => {
+    const services = createMockServices();
+    let requestedDois: string[] = [];
+
+    services.crossref.getReferencesAsync = async () => ({
+      references: [
+        { title: "CrossRef A", doi: "10.1000/ref-a", authors: ["Alice"] },
+        { title: "CrossRef B", doi: "10.1000/ref-b", authors: ["Bob"] },
+      ],
+    });
+    services.europePmc.searchBatchDoiAsync = async (dois: string[]) => {
+      requestedDois = dois;
+      return dois.map((doi) => ({
+        title: `Europe PMC ${doi}`,
+        doi,
+        authorString: "Enriched Author",
+        journalInfo: { journal: { title: "Europe PMC Journal" } },
+        firstPublicationDate: "2026-02-01",
+        abstractText: `Abstract for ${doi}`,
+        pmid: "12345",
+        pmcid: "PMC12345",
+      }));
+    };
+
+    const handlers = createToolHandlers(services);
+    const result = parseTextResult(
+      await handlers.get_references!({
+        identifier: "10.1000/source",
+        id_type: "doi",
+        sources: ["crossref", "europe_pmc"],
+        include_metadata: true,
+      }),
+    );
+
+    expect(requestedDois).toEqual(["10.1000/ref-a", "10.1000/ref-b"]);
+    expect(result.merged_references).toHaveLength(2);
+    expect(result.merged_references[0]).toMatchObject({
+      source: "europe_pmc",
+      doi: "10.1000/ref-a",
+      abstract: "Abstract for 10.1000/ref-a",
+      journal: "Europe PMC Journal",
+      pmcid: "PMC12345",
+    });
+    expect(result.references_by_source.crossref).toHaveLength(2);
+    expect(result.references_by_source.europe_pmc).toHaveLength(2);
   });
 
   it("respects selected literature relation types", async () => {
