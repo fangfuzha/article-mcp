@@ -1,5 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 
+import { convertPmcXmlToMarkdown, htmlToText } from "./html_to_markdown.js";
 import { CacheManager, RateLimiter } from "../middleware/index.js";
 import { defaultApiClient } from "../utils/api_utils.js";
 
@@ -71,6 +72,17 @@ const MONTH_MAP: Record<string, string> = {
   Oct: "10",
   Nov: "11",
   Dec: "12",
+};
+
+const PMC_SECTION_MAPPING: Record<string, string[]> = {
+  methods: ["methods", "methodology", "materials and methods", "materials"],
+  introduction: ["introduction", "intro", "background"],
+  results: ["results", "findings"],
+  discussion: ["discussion", "conclusions"],
+  conclusion: ["conclusion", "conclusions"],
+  abstract: ["abstract", "summary"],
+  references: ["references", "bibliography"],
+  appendix: ["appendix", "supplementary"],
 };
 
 /**
@@ -497,23 +509,32 @@ export class PubMedService {
         .filter(Boolean);
       const bodyMatch = fulltextXml.match(/<body[^>]*>(.*?)<\/body>/is);
       const bodyContent = bodyMatch?.[1] ?? fulltextXml;
-      const sectionResult = this.extractSections(bodyContent, normalizedSections);
-      const contentXml = sectionResult.xml || bodyContent;
-      const text = this.stripXmlTags(contentXml);
-      const markdown = this.xmlToSimpleMarkdown(contentXml);
-
-      return {
+      const sectionResult =
+        sections === undefined
+          ? null
+          : normalizedSections && normalizedSections.length > 0
+            ? this.extractSections(bodyContent, normalizedSections)
+            : { xml: "", found: [] as string[] };
+      const conversionXml = sections === undefined ? bodyContent : (sectionResult?.xml ?? "");
+      const text = conversionXml ? (htmlToText(conversionXml) ?? "") : "";
+      const markdown = conversionXml ? (convertPmcXmlToMarkdown(conversionXml) ?? "") : "";
+      const result: FulltextResult = {
         pmc_id: normalizedPmcId,
-        fulltext_xml: normalizedSections?.length ? contentXml : fulltextXml,
+        fulltext_xml: sections === undefined ? fulltextXml : (sectionResult?.xml ?? ""),
         fulltext_markdown: markdown,
         fulltext_text: text,
         fulltext_available: true,
-        ...(normalizedSections ? { sections_requested: normalizedSections } : {}),
-        sections_found: sectionResult.found,
-        sections_missing: normalizedSections
-          ? normalizedSections.filter((section) => !sectionResult.found.includes(section))
-          : [],
       };
+
+      if (sections !== undefined) {
+        result.sections_requested = normalizedSections ?? [];
+        result.sections_found = sectionResult?.found ?? [];
+        result.sections_missing = (normalizedSections ?? []).filter(
+          (section) => !(sectionResult?.found ?? []).includes(section),
+        );
+      }
+
+      return result;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return {
@@ -826,21 +847,12 @@ export class PubMedService {
     requestedSections?: string[],
   ): { xml: string; found: string[] } {
     if (!requestedSections?.length) {
-      return { xml: bodyContent, found: [] };
+      return { xml: "", found: [] };
     }
 
     const found = new Set<string>();
     const matchedSections: string[] = [];
     const sectionPattern = /<sec\b[^>]*>([\s\S]*?)<\/sec>/gi;
-    const aliases: Record<string, string[]> = {
-      methods: ["methods", "methodology", "materials and methods"],
-      introduction: ["introduction", "intro", "background"],
-      results: ["results", "findings"],
-      discussion: ["discussion"],
-      conclusion: ["conclusion", "conclusions"],
-      abstract: ["abstract", "summary"],
-      references: ["references", "bibliography"],
-    };
 
     for (const match of bodyContent.matchAll(sectionPattern)) {
       const sectionXml = match[0];
@@ -850,7 +862,7 @@ export class PubMedService {
       }
 
       for (const requested of requestedSections) {
-        const candidates = aliases[requested] ?? [requested];
+        const candidates = PMC_SECTION_MAPPING[requested] ?? [requested];
         if (candidates.some((candidate) => title.includes(candidate))) {
           found.add(requested);
           matchedSections.push(sectionXml);
@@ -861,43 +873,15 @@ export class PubMedService {
 
     return {
       xml: matchedSections.join("\n"),
-      found: Array.from(found),
+      found: requestedSections.filter((requested) => found.has(requested)),
     };
   }
 
   private normalizeSectionTitle(sectionXml: string): string {
     const titleMatch = sectionXml.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
     return titleMatch && titleMatch[1]
-      ? this.stripXmlTags(titleMatch[1]).toLowerCase().replace(/\s+/g, " ")
+      ? (htmlToText(titleMatch[1]) ?? "").toLowerCase().replace(/\s+/g, " ")
       : "";
-  }
-
-  private stripXmlTags(xml: string): string {
-    return xml
-      .replace(/<[^>]+>/g, " ")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&amp;/g, "&")
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
-  private xmlToSimpleMarkdown(xml: string): string {
-    return xml
-      .replace(/<title\b[^>]*>([\s\S]*?)<\/title>/gi, (_match, title: string) => {
-        const text = this.stripXmlTags(title);
-        return text ? `\n\n## ${text}\n\n` : "\n\n";
-      })
-      .replace(/<p\b[^>]*>([\s\S]*?)<\/p>/gi, (_match, paragraph: string) => {
-        const text = this.stripXmlTags(paragraph);
-        return text ? `${text}\n\n` : "";
-      })
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\n{3,}/g, "\n\n")
-      .replace(/[ \t]+/g, " ")
-      .trim();
   }
 }
 
