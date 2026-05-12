@@ -338,6 +338,17 @@ async function handleGetLiteratureRelations(
     }),
   );
 
+  const networkData =
+    args.analysis_type === "network" || args.analysis_type === "comprehensive"
+      ? await buildRelationNetworkData(
+          services,
+          relations,
+          args.max_depth,
+          args.max_results,
+          args.sources,
+        )
+      : undefined;
+
   return textResult({
     success: true,
     identifier: finalIdentifiers,
@@ -345,9 +356,7 @@ async function handleGetLiteratureRelations(
     relation_types: args.relation_types,
     analysis_type: args.analysis_type,
     relations,
-    ...(args.analysis_type === "network" || args.analysis_type === "comprehensive"
-      ? { network_data: buildRelationNetwork(relations) }
-      : {}),
+    ...(networkData ? { network_data: networkData } : {}),
     statistics: {
       total_relations: relations.reduce((sum, item) => sum + countRelationItems(item), 0),
     },
@@ -689,6 +698,161 @@ function buildRelationNetwork(relations: Array<Record<string, unknown>>): {
     edges,
     clusters: {},
   };
+}
+
+async function buildRelationNetworkData(
+  services: ArticleMcpServices,
+  relations: Array<Record<string, unknown>>,
+  maxDepth: number,
+  maxResults: number,
+  sources?: string[],
+): Promise<{
+  nodes: Array<Record<string, unknown>>;
+  edges: Array<Record<string, unknown>>;
+  clusters: Record<string, unknown>;
+}> {
+  const network = buildRelationNetwork(relations);
+
+  if (maxDepth <= 1) {
+    return network;
+  }
+
+  const nodes = new Map<string, Record<string, unknown>>(
+    network.nodes.map((node) => [String(node.id), node]),
+  );
+  const edges = [...network.edges];
+  const referenceSources = (
+    sources?.length ? sources : ["europe_pmc", "crossref", "pubmed"]
+  ).filter((source) => ["europe_pmc", "crossref", "pubmed"].includes(source));
+  const frontier: Array<{
+    nodeId: string;
+    identifier: string;
+    idType: "doi" | "pmid" | "pmcid";
+    depth: number;
+  }> = [];
+  const expanded = new Set<string>();
+
+  for (const relation of relations) {
+    for (const relationType of ["references", "citing"] as const) {
+      const items = relation[relationType];
+      if (!Array.isArray(items)) {
+        continue;
+      }
+
+      for (const item of items) {
+        const expansionTarget = relationExpansionTarget(item);
+        if (!expansionTarget) {
+          continue;
+        }
+
+        frontier.push({
+          nodeId: expansionTarget.nodeId,
+          identifier: expansionTarget.identifier,
+          idType: expansionTarget.idType,
+          depth: 1,
+        });
+      }
+    }
+  }
+
+  while (frontier.length) {
+    const current = frontier.shift();
+    if (!current || current.depth >= maxDepth) {
+      continue;
+    }
+
+    const expansionKey = `${current.idType}:${current.identifier}`.toLowerCase();
+    if (expanded.has(expansionKey)) {
+      continue;
+    }
+    expanded.add(expansionKey);
+
+    const referenceResult = await services.referenceService.getReferencesAsync({
+      identifier: current.identifier,
+      idType: current.idType,
+      sources: referenceSources,
+      maxResults,
+      includeMetadata: false,
+    });
+    const references = Array.isArray(referenceResult.merged_references)
+      ? referenceResult.merged_references
+      : [];
+
+    for (const item of references) {
+      const article: Record<string, unknown> = isRecord(item) ? item : { value: item };
+      const targetId = relationNodeId(article) ?? `${current.nodeId}:references:${edges.length}`;
+      const targetTitle = typeof article.title === "string" ? article.title.trim() : "";
+      const targetLabel = targetTitle || targetId;
+      if (!nodes.has(targetId)) {
+        nodes.set(targetId, {
+          id: targetId,
+          type: "references",
+          label: targetLabel,
+        });
+      }
+
+      const edgeKey = `${current.nodeId}->${targetId}:references`;
+      if (!edges.some((edge) => `${edge.source}->${edge.target}:${edge.relation}` === edgeKey)) {
+        edges.push({
+          source: current.nodeId,
+          target: targetId,
+          relation: "references",
+          depth: current.depth + 1,
+        });
+      }
+
+      const nextTarget = relationExpansionTarget(article);
+      if (nextTarget) {
+        frontier.push({
+          nodeId: targetId,
+          identifier: nextTarget.identifier,
+          idType: nextTarget.idType,
+          depth: current.depth + 1,
+        });
+      }
+    }
+  }
+
+  return {
+    nodes: Array.from(nodes.values()),
+    edges,
+    clusters: {},
+  };
+}
+
+function relationExpansionTarget(
+  item: unknown,
+): { nodeId: string; identifier: string; idType: "doi" | "pmid" | "pmcid" } | null {
+  if (!isRecord(item)) {
+    return null;
+  }
+
+  const doi = String(item.doi ?? item.DOI ?? "").trim();
+  if (doi) {
+    return { nodeId: doi, identifier: doi, idType: "doi" };
+  }
+
+  const pmid = String(item.pmid ?? "").trim();
+  if (pmid) {
+    return { nodeId: pmid, identifier: pmid, idType: "pmid" };
+  }
+
+  const pmcid = String(item.pmcid ?? item.pmc_id ?? "").trim();
+  if (pmcid) {
+    return { nodeId: pmcid, identifier: pmcid, idType: "pmcid" };
+  }
+
+  return null;
+}
+
+function relationNodeId(item: Record<string, unknown>): string | null {
+  return (
+    String(item.doi ?? item.DOI ?? "").trim() ||
+    String(item.pmid ?? "").trim() ||
+    String(item.pmcid ?? item.pmc_id ?? "").trim() ||
+    String(item.title ?? "").trim() ||
+    null
+  );
 }
 
 function filterMetrics(

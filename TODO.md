@@ -44,7 +44,7 @@ Python 到 Node 的迁移尚未完成。
   - `analysis_type=network/comprehensive`、`max_depth`、PMID/PMCID 到 DOI 转换、网络节点边和指标均未迁移。
   - 需要迁移 Python 版 `relation_tools.py` 和 `similar_articles.py` 的核心行为，或明确删减并同步文档。
   - 验收标准：`references`、`similar`、`citing` 可独立选择；批量与网络分析有稳定输出结构和测试。
-  - 进展：已按 `relation_types` 控制 `references`、`citing`、`similar` 字段输出，并补测试；`similar` 已接入 PubMed E-utils 相似文献查询；DOI 会解析 PMID，PMID/PMCID 会解析 DOI；`references` 分支已开始复用统一参考文献服务，向 Python `relation_tools.py` 调用工具3逻辑的结构靠拢；`analysis_type=network/comprehensive` 会返回基础 `network_data.nodes/edges/clusters`。仍需迁移 Python 版完整网络指标、聚类、`max_depth` 深度分析和更细的 PMID/PMCID 转 DOI 兜底链路。
+  - 进展：已按 `relation_types` 控制 `references`、`citing`、`similar` 字段输出，并补测试；`similar` 已接入 PubMed E-utils 相似文献查询；DOI 会解析 PMID，PMID/PMCID 会解析 DOI；`references` 分支已开始复用统一参考文献服务，向 Python `relation_tools.py` 调用工具3逻辑的结构靠拢；`analysis_type=network/comprehensive` 会返回基础 `network_data.nodes/edges/clusters`，且 `max_depth>1` 时会继续展开引用网络。仍需迁移 Python 版完整网络指标、聚类和更细的 PMID/PMCID 转 DOI 兜底链路。
 
 - [ ] 补齐 `get_journal_quality` 的缓存、指标过滤和排序。
   - 当前 Node 版调用 EasyScholar 与 OpenAlex，但 `include_metrics` 只回显不筛选；`use_cache` 仅传给 OpenAlex，EasyScholar 没有缓存；`sort_by/sort_order` 未实现。

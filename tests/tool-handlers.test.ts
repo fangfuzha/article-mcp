@@ -605,6 +605,82 @@ describe("tool handlers", () => {
     });
   });
 
+  it("expands relation networks when max_depth is greater than one", async () => {
+    const services = createMockServices();
+    vi.spyOn(services.referenceService, "getReferencesAsync").mockImplementation(
+      async (options) => {
+        if (options.identifier === "10.1000/source") {
+          return {
+            success: true,
+            identifier: "10.1000/source",
+            id_type: "doi",
+            resolved_identifier: { doi: "10.1000/source" },
+            sources_used: ["crossref"],
+            references_by_source: {
+              crossref: [{ title: "Level 1", doi: "10.1000/level-1", source: "crossref" }],
+            },
+            merged_references: [{ title: "Level 1", doi: "10.1000/level-1", source: "crossref" }],
+            total_count: 1,
+            processing_time: 0.01,
+          };
+        }
+
+        if (options.identifier === "10.1000/level-1") {
+          return {
+            success: true,
+            identifier: "10.1000/level-1",
+            id_type: "doi",
+            resolved_identifier: { doi: "10.1000/level-1" },
+            sources_used: ["crossref"],
+            references_by_source: {
+              crossref: [{ title: "Level 2", doi: "10.1000/level-2", source: "crossref" }],
+            },
+            merged_references: [{ title: "Level 2", doi: "10.1000/level-2", source: "crossref" }],
+            total_count: 1,
+            processing_time: 0.01,
+          };
+        }
+
+        return {
+          success: true,
+          identifier: String(options.identifier),
+          id_type: options.idType ?? "doi",
+          resolved_identifier: {},
+          sources_used: [],
+          references_by_source: {},
+          merged_references: [],
+          total_count: 0,
+          processing_time: 0.01,
+        };
+      },
+    );
+
+    const handlers = createToolHandlers(services);
+    const result = parseTextResult(
+      await handlers.get_literature_relations!({
+        identifiers: "10.1000/source",
+        relation_types: ["references"],
+        analysis_type: "network",
+        max_depth: 2,
+        sources: ["crossref"],
+      }),
+    );
+
+    expect(result.network_data.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "10.1000/source" }),
+        expect.objectContaining({ id: "10.1000/level-1" }),
+        expect.objectContaining({ id: "10.1000/level-2" }),
+      ]),
+    );
+    expect(result.network_data.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: "10.1000/source", target: "10.1000/level-1" }),
+        expect.objectContaining({ source: "10.1000/level-1", target: "10.1000/level-2" }),
+      ]),
+    );
+  });
+
   it("filters journal metrics and sorts batch results", async () => {
     const handlers = createToolHandlers(createMockServices());
     const result = parseTextResult(
