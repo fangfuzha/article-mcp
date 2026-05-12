@@ -1,0 +1,55 @@
+name: Publish Node Package
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Extract tag version
+        id: version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Tag version: $VERSION"
+
+      - name: Verify package version
+        shell: bash
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          EXPECTED_VERSION="${{ steps.version.outputs.version }}"
+          echo "Package version: $PACKAGE_VERSION"
+          echo "Expected version: $EXPECTED_VERSION"
+          test "$PACKAGE_VERSION" = "$EXPECTED_VERSION"
+
+      - name: Run release checks
+        run: npm run test:all
+
+      - name: Pack package
+        run: npm pack --dry-run
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
