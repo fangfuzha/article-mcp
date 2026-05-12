@@ -259,87 +259,16 @@ async function handleGetReferences(
   services: ArticleMcpServices,
   toolArguments: unknown,
 ): Promise<CallToolResult> {
-  const startTime = Date.now();
   const args = GetReferencesArgumentsSchema.parse(toolArguments);
-  const idType = args.id_type === "auto" ? extractIdentifierType(args.identifier) : args.id_type;
-  const resolved = await resolveArticleIdentifiers(services, args.identifier, idType);
-  const doiIdentifier = resolved.doi ?? (idType === "doi" ? args.identifier : null);
-  const sourceList = args.sources?.length ? args.sources : ["europe_pmc", "crossref", "pubmed"];
-  const referencesBySource: Record<string, unknown[]> = {};
-  let crossrefReferences: unknown[] = [];
-  let pubmedReferences: unknown[] = [];
-  let europePmcReferences: unknown[] = [];
-
-  if (sourceList.includes("crossref") && doiIdentifier) {
-    const result = await services.crossref.getReferencesAsync(doiIdentifier, args.max_results);
-    crossrefReferences = Array.isArray(result.references) ? result.references : [];
-  }
-
-  if (sourceList.includes("pubmed") && idType === "pmid") {
-    const result = await services.pubmed.getCitingArticlesAsync(
-      args.identifier,
-      undefined,
-      args.max_results,
-    );
-    pubmedReferences = Array.isArray(result.citing_articles) ? result.citing_articles : [];
-  }
-
-  if (sourceList.includes("europe_pmc")) {
-    const lookup = buildEuropePmcReferenceLookup(args.identifier, idType, resolved, doiIdentifier);
-    const result = await services.europePmc.getReferencesAsync(
-      lookup.identifier,
-      lookup.idType,
-      args.max_results,
-    );
-    europePmcReferences = Array.isArray(result.references) ? result.references : [];
-  }
-
-  if (sourceList.includes("europe_pmc") && crossrefReferences.length) {
-    const referenceDois = uniqueReferenceDois(crossrefReferences).slice(0, args.max_results);
-    const result = referenceDois.length
-      ? await services.europePmc.searchBatchDoiAsync(referenceDois)
-      : [];
-    europePmcReferences = appendMissingReferences(
-      europePmcReferences,
-      result.map(formatEuropePmcReference),
-    );
-  }
-
-  if (europePmcReferences.length) {
-    referencesBySource.europe_pmc = europePmcReferences;
-  }
-  if (pubmedReferences.length) {
-    referencesBySource.pubmed = pubmedReferences;
-  }
-  if (crossrefReferences.length) {
-    referencesBySource.crossref = crossrefReferences;
-  }
-
-  const filteredReferencesBySource = args.include_metadata
-    ? referencesBySource
-    : Object.fromEntries(
-        Object.entries(referencesBySource).map(([source, references]) => [
-          source,
-          references.map((reference) => trimReferenceMetadata(reference)),
-        ]),
-      );
-
-  const mergedReferences = mergeReferences(referencesBySource, args.include_metadata).slice(
-    0,
-    args.max_results,
+  return textResult(
+    await services.referenceService.getReferencesAsync({
+      identifier: args.identifier,
+      idType: args.id_type,
+      maxResults: args.max_results,
+      includeMetadata: args.include_metadata,
+      ...(args.sources ? { sources: args.sources } : {}),
+    }),
   );
-
-  return textResult({
-    success: mergedReferences.length > 0,
-    identifier: args.identifier,
-    id_type: idType,
-    resolved_identifier: resolved,
-    sources_used: Object.keys(filteredReferencesBySource),
-    references_by_source: filteredReferencesBySource,
-    merged_references: mergedReferences,
-    total_count: mergedReferences.length,
-    processing_time: Math.round(((Date.now() - startTime) / 1000) * 100) / 100,
-  });
 }
 
 async function handleGetLiteratureRelations(
@@ -365,12 +294,20 @@ async function handleGetLiteratureRelations(
         resolved_identifier: resolved,
       };
 
-      if (args.relation_types.includes("references") && doiIdentifier) {
-        const references = await services.crossref.getReferencesAsync(
-          doiIdentifier,
-          args.max_results,
-        );
-        relationResult.references = references.references || [];
+      if (args.relation_types.includes("references")) {
+        const referenceSources = (
+          args.sources?.length ? args.sources : ["europe_pmc", "crossref", "pubmed"]
+        ).filter((source) => ["europe_pmc", "crossref", "pubmed"].includes(source));
+        const referenceResult = await services.referenceService.getReferencesAsync({
+          identifier,
+          idType,
+          sources: referenceSources,
+          maxResults: args.max_results,
+          includeMetadata: false,
+        });
+        relationResult.references = Array.isArray(referenceResult.merged_references)
+          ? referenceResult.merged_references
+          : [];
       }
 
       if (args.relation_types.includes("citing") && doiIdentifier) {
@@ -535,188 +472,6 @@ function selectFulltextContent(fulltext: Record<string, unknown>, format: string
     return fulltext.fulltext_text;
   }
   return fulltext.fulltext_markdown;
-}
-
-/**
- * Formats a Europe PMC article record as reference metadata.
- *
- * @param item Raw Europe PMC article record.
- * @returns Normalized reference metadata.
- */
-function formatEuropePmcReference(item: Record<string, unknown>): Record<string, unknown> {
-  return {
-    title: item.title,
-    authors: item.authorString ? String(item.authorString).split(",") : [],
-    journal: isRecord(item.journalInfo)
-      ? (item.journalInfo.journal as Record<string, unknown> | undefined)?.title
-      : undefined,
-    publication_date: item.firstPublicationDate,
-    doi: item.doi,
-    pmid: item.pmid,
-    pmcid: item.pmcid,
-    abstract: item.abstractText,
-    source: "europe_pmc",
-  };
-}
-
-/**
- * 构建 Europe PMC references endpoint 最适合使用的标识符。
- *
- * @param originalIdentifier 工具调用传入的原始标识符。
- * @param idType 已归一化的标识符类型。
- * @param resolved 从 Europe PMC 元数据解析出的标识符集合。
- * @param doiIdentifier 其他参考文献源使用的 DOI。
- * @returns 传给 Europe PMC 服务的标识符与类型。
- */
-function buildEuropePmcReferenceLookup(
-  originalIdentifier: string,
-  idType: "doi" | "pmid" | "pmcid",
-  resolved: { doi?: string; pmid?: string; pmcid?: string },
-  doiIdentifier: string | null,
-): { identifier: string; idType: "doi" | "pmid" | "pmcid" } {
-  if (idType === "pmid") {
-    return { identifier: stripIdentifierPrefix(originalIdentifier), idType: "pmid" };
-  }
-
-  if (idType === "pmcid") {
-    return {
-      identifier: normalizePmcid(originalIdentifier) ?? stripIdentifierPrefix(originalIdentifier),
-      idType: "pmcid",
-    };
-  }
-
-  if (resolved.pmid) {
-    return { identifier: resolved.pmid, idType: "pmid" };
-  }
-
-  if (resolved.pmcid) {
-    return { identifier: resolved.pmcid, idType: "pmcid" };
-  }
-
-  if (doiIdentifier) {
-    return { identifier: doiIdentifier, idType: "doi" };
-  }
-
-  return { identifier: originalIdentifier, idType };
-}
-
-/**
- * 去除工具入参中的常见标识符前缀。
- *
- * @param identifier 用户传入的 DOI、PMID 或 PMCID。
- * @returns 去除前缀并裁剪空白后的标识符。
- */
-function stripIdentifierPrefix(identifier: string): string {
-  return identifier
-    .replace(/^DOI:/i, "")
-    .replace(/^PMID:/i, "")
-    .replace(/^PMCID:/i, "")
-    .trim();
-}
-
-/**
- * 追加当前列表中还不存在的参考文献。
- *
- * @param primary 应优先保留的已有参考文献。
- * @param additions 缺失时追加的参考文献。
- * @returns 保留 primary 优先级后的合并列表。
- */
-function appendMissingReferences(primary: unknown[], additions: unknown[]): unknown[] {
-  const combined = [...primary];
-  const seenKeys = new Set(
-    primary
-      .map((reference) => (isRecord(reference) ? referenceKey(reference) : null))
-      .filter((key): key is string => Boolean(key)),
-  );
-
-  for (const addition of additions) {
-    if (!isRecord(addition)) {
-      combined.push(addition);
-      continue;
-    }
-
-    const key = referenceKey(addition);
-    if (key && seenKeys.has(key)) {
-      continue;
-    }
-
-    if (key) {
-      seenKeys.add(key);
-    }
-    combined.push(addition);
-  }
-
-  return combined;
-}
-
-/**
- * 在关闭 include_metadata 时裁剪详细字段，保持 references_by_source 与 merged_references 语义一致。
- *
- * @param reference 任意上游来源的参考文献记录。
- * @returns 去除详细元数据后的参考文献记录；非对象值原样返回。
- */
-function trimReferenceMetadata(reference: unknown): unknown {
-  if (!isRecord(reference)) {
-    return reference;
-  }
-
-  const { abstract, volume, issue, pages, page, publisher, ...rest } = reference;
-  void abstract;
-  void volume;
-  void issue;
-  void pages;
-  void page;
-  void publisher;
-  return rest;
-}
-
-/**
- * 为参考文献生成稳定的去重键。
- *
- * @param reference 任意上游来源的参考文献记录。
- * @returns 基于 DOI 或标题的键；缺少二者时返回 null。
- */
-function referenceKey(reference: Record<string, unknown>): string | null {
-  const doi = String(reference.doi ?? reference.DOI ?? "")
-    .trim()
-    .toLowerCase();
-  if (doi) {
-    return `doi:${doi}`;
-  }
-
-  const title = String(reference.title ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
-  return title ? `title:${title}` : null;
-}
-
-/**
- * Extracts unique DOI values from references while preserving first-seen order.
- *
- * @param references Reference records from upstream sources.
- * @returns Unique DOI values.
- */
-function uniqueReferenceDois(references: unknown[]): string[] {
-  const seen = new Set<string>();
-  const dois: string[] = [];
-
-  for (const reference of references) {
-    if (!isRecord(reference)) {
-      continue;
-    }
-
-    const doi = String(reference.doi ?? reference.DOI ?? "").trim();
-    const normalizedDoi = doi.toLowerCase();
-    if (!doi || seen.has(normalizedDoi)) {
-      continue;
-    }
-
-    seen.add(normalizedDoi);
-    dois.push(doi);
-  }
-
-  return dois;
 }
 
 /**
@@ -890,60 +645,6 @@ async function resolveArticleIdentifiers(
         ? { pmcid: article.pmc_id }
         : {}),
   };
-}
-
-function mergeReferences(
-  referencesBySource: Record<string, unknown[]>,
-  includeMetadata: boolean,
-): Array<Record<string, unknown>> {
-  const mergedByKey = new Map<string, Record<string, unknown>>();
-  const sourcePriority: Record<string, number> = { europe_pmc: 1, pubmed: 2, crossref: 3 };
-
-  for (const [source, references] of Object.entries(referencesBySource)) {
-    for (const rawReference of references) {
-      const reference = isRecord(rawReference) ? rawReference : { value: rawReference };
-      const doi = String(reference.doi ?? reference.DOI ?? "")
-        .trim()
-        .toLowerCase();
-      const title = String(reference.title ?? "")
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, " ");
-      const key = doi ? `doi:${doi}` : title ? `title:${title}` : `${source}:${mergedByKey.size}`;
-
-      const standardReference: Record<string, unknown> = {
-        title: reference.title ?? "",
-        authors: reference.authors ?? [],
-        journal: reference.journal ?? reference.journal_name ?? "",
-        publication_date: reference.publication_date ?? reference.year ?? "",
-        doi: reference.doi ?? reference.DOI ?? "",
-        pmid: reference.pmid ?? "",
-        pmcid: reference.pmcid ?? reference.pmc_id ?? "",
-        source,
-      };
-
-      if (includeMetadata) {
-        standardReference.abstract = reference.abstract ?? "";
-        standardReference.volume = reference.volume ?? "";
-        standardReference.issue = reference.issue ?? "";
-        standardReference.pages = reference.pages ?? reference.page ?? "";
-        standardReference.publisher = reference.publisher ?? "";
-      }
-
-      const existing = mergedByKey.get(key);
-      const existingPriority = sourcePriority[String(existing?.source)] ?? Number.MAX_SAFE_INTEGER;
-      const currentPriority = sourcePriority[source] ?? Number.MAX_SAFE_INTEGER;
-
-      if (!existing || currentPriority < existingPriority) {
-        mergedByKey.set(key, standardReference);
-      }
-    }
-  }
-
-  return Array.from(mergedByKey.values()).sort(
-    (left, right) =>
-      (sourcePriority[String(left.source)] ?? 4) - (sourcePriority[String(right.source)] ?? 4),
-  );
 }
 
 function buildRelationNetwork(relations: Array<Record<string, unknown>>): {

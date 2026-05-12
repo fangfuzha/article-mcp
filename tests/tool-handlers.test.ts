@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { ArticleMcpServices } from "../src/services/container.js";
+import { UnifiedReferenceService } from "../src/services/reference_service.js";
 import { createToolHandlers } from "../src/tools/handlers.js";
 
 function parseTextResult(result: CallToolResult): Record<string, any> {
@@ -14,7 +15,7 @@ function parseTextResult(result: CallToolResult): Record<string, any> {
 }
 
 function createMockServices(): ArticleMcpServices {
-  return {
+  const services = {
     europePmc: {
       searchAsync: async () => ({
         articles: [
@@ -159,6 +160,17 @@ function createMockServices(): ArticleMcpServices {
       batchGetJournalMetrics: async () => [],
     },
   } as unknown as ArticleMcpServices;
+
+  services.referenceService = new UnifiedReferenceService(
+    {
+      europePmc: services.europePmc,
+      crossref: services.crossref,
+      pubmed: services.pubmed,
+    } as any,
+    console,
+  );
+
+  return services;
 }
 
 describe("tool handlers", () => {
@@ -365,6 +377,46 @@ describe("tool handlers", () => {
     expect(result.references_by_source.europe_pmc[0]).not.toHaveProperty("abstract");
   });
 
+  it("delegates reference orchestration to the unified reference service", async () => {
+    const services = createMockServices();
+    const referenceResult = {
+      success: true,
+      identifier: "10.1000/source",
+      id_type: "doi",
+      resolved_identifier: { doi: "10.1000/source" },
+      sources_used: ["crossref"],
+      references_by_source: {
+        crossref: [{ title: "Delegated Ref", doi: "10.1000/ref-a", source: "crossref" }],
+      },
+      merged_references: [{ title: "Delegated Ref", doi: "10.1000/ref-a", source: "crossref" }],
+      total_count: 1,
+      processing_time: 0.01,
+    };
+    const referenceSpy = vi
+      .spyOn(services.referenceService, "getReferencesAsync")
+      .mockResolvedValue(referenceResult);
+
+    const handlers = createToolHandlers(services);
+    const result = parseTextResult(
+      await handlers.get_references!({
+        identifier: "10.1000/source",
+        id_type: "doi",
+        sources: ["crossref"],
+        max_results: 3,
+        include_metadata: false,
+      }),
+    );
+
+    expect(referenceSpy).toHaveBeenCalledWith({
+      identifier: "10.1000/source",
+      idType: "doi",
+      sources: ["crossref"],
+      maxResults: 3,
+      includeMetadata: false,
+    });
+    expect(result).toEqual(referenceResult);
+  });
+
   it("enriches CrossRef references with Europe PMC metadata", async () => {
     const services = createMockServices();
     let requestedDois: string[] = [];
@@ -494,6 +546,46 @@ describe("tool handlers", () => {
     expect(result.relations[0]).toHaveProperty("references");
     expect(result.relations[0].similar).toHaveLength(1);
     expect(result.relations[0]).not.toHaveProperty("citing");
+  });
+
+  it("reuses the unified reference service for relation reference analysis", async () => {
+    const services = createMockServices();
+    const referenceSpy = vi
+      .spyOn(services.referenceService, "getReferencesAsync")
+      .mockResolvedValue({
+        success: true,
+        identifier: "10.1000/source",
+        id_type: "doi",
+        resolved_identifier: { doi: "10.1000/source" },
+        sources_used: ["crossref"],
+        references_by_source: {
+          crossref: [{ title: "Relation Ref", doi: "10.1000/ref-a", source: "crossref" }],
+        },
+        merged_references: [{ title: "Relation Ref", doi: "10.1000/ref-a", source: "crossref" }],
+        total_count: 1,
+        processing_time: 0.02,
+      });
+
+    const handlers = createToolHandlers(services);
+    const result = parseTextResult(
+      await handlers.get_literature_relations!({
+        identifiers: "10.1000/source",
+        relation_types: ["references"],
+        sources: ["crossref", "openalex"],
+        max_results: 4,
+      }),
+    );
+
+    expect(referenceSpy).toHaveBeenCalledWith({
+      identifier: "10.1000/source",
+      idType: "doi",
+      sources: ["crossref"],
+      maxResults: 4,
+      includeMetadata: false,
+    });
+    expect(result.relations[0].references).toEqual([
+      { title: "Relation Ref", doi: "10.1000/ref-a", source: "crossref" },
+    ]);
   });
 
   it("builds network data for network relation analysis", async () => {
