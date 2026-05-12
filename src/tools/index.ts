@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+import { SearchCache } from "../middleware/search_cache.js";
 import {
   createErrorBoundaryMiddleware,
   createLoggingMiddleware,
@@ -32,7 +33,8 @@ const TOOL_RUNTIME_SCHEMAS = {
  */
 export function registerArticleMcpTools(server: McpServer): void {
   const services = createArticleMcpServices();
-  const handlers = createToolHandlers(services);
+  const searchCache = new SearchCache();
+  const handlers = createToolHandlers(services, searchCache);
   const pipeline = new ToolExecutionPipeline([
     createErrorBoundaryMiddleware(),
     createLoggingMiddleware(),

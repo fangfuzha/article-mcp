@@ -1,6 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { ArticleMcpServices } from "../services/container.js";
+import { SearchCache } from "../middleware/search_cache.js";
 import {
   GetArticleDetailsArgumentsSchema,
   GetJournalQualityArgumentsSchema,
@@ -56,9 +57,14 @@ const SEARCH_STRATEGIES: Record<string, SearchStrategy> = {
  * @param services Article MCP service container.
  * @returns Tool handlers keyed by MCP tool name.
  */
-export function createToolHandlers(services: ArticleMcpServices): ToolHandlerMap {
+export function createToolHandlers(
+  services: ArticleMcpServices,
+  searchCache?: SearchCache | null,
+): ToolHandlerMap {
+  const cache = searchCache ?? undefined;
+
   return {
-    search_literature: (toolArguments) => handleSearchLiterature(services, toolArguments),
+    search_literature: (toolArguments) => handleSearchLiterature(services, cache, toolArguments),
     get_article_details: (toolArguments) => handleGetArticleDetails(services, toolArguments),
     get_references: (toolArguments) => handleGetReferences(services, toolArguments),
     get_literature_relations: (toolArguments) =>
@@ -69,12 +75,25 @@ export function createToolHandlers(services: ArticleMcpServices): ToolHandlerMap
 
 async function handleSearchLiterature(
   services: ArticleMcpServices,
+  searchCache: SearchCache | undefined,
   toolArguments: unknown,
 ): Promise<CallToolResult> {
   const args = SearchLiteratureArgumentsSchema.parse(toolArguments);
   const strategy = SEARCH_STRATEGIES[args.search_type] ?? DEFAULT_SEARCH_STRATEGY;
   const sources = args.sources?.length ? args.sources : strategy.defaultSources;
   const maxResultsPerSource = Math.min(args.max_results, strategy.maxResultsPerSource);
+
+  // 文件缓存层（Python SearchCache 等价）
+  let cacheKey: string | undefined;
+  if (searchCache && args.use_cache) {
+    cacheKey = SearchCache.generateKey(args.keyword, sources, maxResultsPerSource);
+    const cached = (await searchCache.get(cacheKey)) as Record<string, unknown> | null;
+    if (cached) {
+      cached.cached = true;
+      cached.cache_hit = true;
+      return textResult(cached as Record<string, unknown>);
+    }
+  }
 
   const resultsBySource: Record<string, unknown[]> = {};
   const cacheHitsBySource: Record<string, boolean> = {};
@@ -150,7 +169,7 @@ async function handleSearchLiterature(
   const mergedResults = rankSearchResults(mergeArticles(resultsBySource, strategy.mergeStrategy));
   const cacheHit = Object.values(cacheHitsBySource).some(Boolean);
 
-  return textResult({
+  const result: Record<string, unknown> = {
     success: true,
     keyword: args.keyword,
     sources_used: sourcesUsed,
@@ -167,7 +186,14 @@ async function handleSearchLiterature(
     cached: cacheHit,
     cache_hit: cacheHit,
     cache_hits_by_source: cacheHitsBySource,
-  });
+  };
+
+  // 保存到文件缓存
+  if (searchCache && cacheKey) {
+    await searchCache.set(cacheKey, result);
+  }
+
+  return textResult(result);
 }
 
 async function handleGetArticleDetails(
