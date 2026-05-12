@@ -315,6 +315,15 @@ async function handleGetReferences(
     referencesBySource.crossref = crossrefReferences;
   }
 
+  const filteredReferencesBySource = args.include_metadata
+    ? referencesBySource
+    : Object.fromEntries(
+        Object.entries(referencesBySource).map(([source, references]) => [
+          source,
+          references.map((reference) => trimReferenceMetadata(reference)),
+        ]),
+      );
+
   const mergedReferences = mergeReferences(referencesBySource, args.include_metadata).slice(
     0,
     args.max_results,
@@ -325,8 +334,8 @@ async function handleGetReferences(
     identifier: args.identifier,
     id_type: idType,
     resolved_identifier: resolved,
-    sources_used: Object.keys(referencesBySource),
-    references_by_source: referencesBySource,
+    sources_used: Object.keys(filteredReferencesBySource),
+    references_by_source: filteredReferencesBySource,
     merged_references: mergedReferences,
     total_count: mergedReferences.length,
     processing_time: Math.round(((Date.now() - startTime) / 1000) * 100) / 100,
@@ -638,6 +647,27 @@ function appendMissingReferences(primary: unknown[], additions: unknown[]): unkn
   }
 
   return combined;
+}
+
+/**
+ * 在关闭 include_metadata 时裁剪详细字段，保持 references_by_source 与 merged_references 语义一致。
+ *
+ * @param reference 任意上游来源的参考文献记录。
+ * @returns 去除详细元数据后的参考文献记录；非对象值原样返回。
+ */
+function trimReferenceMetadata(reference: unknown): unknown {
+  if (!isRecord(reference)) {
+    return reference;
+  }
+
+  const { abstract, volume, issue, pages, page, publisher, ...rest } = reference;
+  void abstract;
+  void volume;
+  void issue;
+  void pages;
+  void page;
+  void publisher;
+  return rest;
 }
 
 /**

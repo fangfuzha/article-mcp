@@ -362,6 +362,7 @@ describe("tool handlers", () => {
     expect(result.merged_references[0].doi).toBe("10.1000/ref-a");
     expect(result.merged_references[0].source).toBe("europe_pmc");
     expect(result.merged_references[0]).not.toHaveProperty("abstract");
+    expect(result.references_by_source.europe_pmc[0]).not.toHaveProperty("abstract");
   });
 
   it("enriches CrossRef references with Europe PMC metadata", async () => {

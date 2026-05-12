@@ -37,7 +37,7 @@ Python 到 Node 的迁移尚未完成。
   - 当前 Node 版直接调用 CrossRef/PubMed/Europe PMC，Europe PMC references endpoint 已接入，但 `reference_service` 的统一编排和 `include_metadata` 的完整语义仍未完全等价。
   - 需要迁移 `reference_service.py` 的核心逻辑，支持 DOI/PMID/PMCID 自动识别和转换路径。
   - 验收标准：DOI、PMID、PMCID 三类输入均可返回去重后的 `merged_references`，并能关闭详细元数据。
-  - 进展：已补入 `id_type=auto` 识别、多源并发、参考文献按 DOI/标题去重、来源优先级排序和 `include_metadata=false` 字段裁剪测试；PMID/PMCID 输入会先通过 Europe PMC 解析 DOI，再进入 CrossRef 查询链路；CrossRef 参考文献 DOI 会批量查询 Europe PMC 补充摘要、PMID、PMCID 等元数据，并在去重时优先保留 Europe PMC 结果；已接入真正的 Europe PMC references endpoint，支持 DOI/PMID/PMCID 路径解析和直接参考文献抓取。仍需完整迁移 `reference_service.py` 的剩余统一编排逻辑。
+  - 进展：已补入 `id_type=auto` 识别、多源并发、参考文献按 DOI/标题去重、来源优先级排序和 `include_metadata=false` 字段裁剪测试；`include_metadata=false` 现已同时裁剪 `merged_references` 与 `references_by_source` 的详细字段；PMID/PMCID 输入会先通过 Europe PMC 解析 DOI，再进入 CrossRef 查询链路；CrossRef 参考文献 DOI 会批量查询 Europe PMC 补充摘要、PMID、PMCID 等元数据，并在去重时优先保留 Europe PMC 结果；已接入真正的 Europe PMC references endpoint，支持 DOI/PMID/PMCID 路径解析和直接参考文献抓取。仍需完整迁移 `reference_service.py` 的剩余统一编排逻辑。
 
 - [ ] 补齐 `get_literature_relations` 的关系分析。
   - 当前 Node 版只返回 CrossRef references 和 OpenAlex citing，未实现 `similar`，也未按 `relation_types` 过滤。
