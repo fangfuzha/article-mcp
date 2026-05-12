@@ -1,9 +1,8 @@
-// @ts-nocheck
 /**
  * OpenAlex API 服务 - 纯异步实现
  */
 
-import { defaultApiClient } from "../utils/api_utils";
+import { defaultApiClient } from "../utils/api_utils.js";
 
 interface Author {
   display_name: string;
@@ -35,9 +34,11 @@ interface Work {
   id?: string;
 }
 
+type JsonRecord = Record<string, any>;
+
 interface SearchWorkResponse {
   success: boolean;
-  articles: Record<string, any>[];
+  articles: JsonRecord[];
   total_count: number;
   source: string;
   error?: string;
@@ -45,14 +46,14 @@ interface SearchWorkResponse {
 
 interface WorkByDoiResponse {
   success: boolean;
-  article: Record<string, any> | null;
+  article: JsonRecord | null;
   source: string;
   error?: string;
 }
 
 interface CitationsResponse {
   success: boolean;
-  citations: Record<string, any>[];
+  citations: JsonRecord[];
   total_count: number;
   source: string;
   error?: string;
@@ -72,11 +73,11 @@ export class OpenAlexService {
   async searchWorksAsync(
     query: string,
     maxResults: number = 10,
-    filters?: Record<string, any>,
+    filters?: JsonRecord,
   ): Promise<SearchWorkResponse> {
     try {
       const url = `${this.baseUrl}/works`;
-      const params: Record<string, any> = {
+      const params: JsonRecord = {
         search: query,
         "per-page": maxResults,
         select: "id,title,authorships,publication_year,primary_location,open_access",
@@ -158,7 +159,7 @@ export class OpenAlexService {
   /**
    * 过滤开放获取文献（纯数据处理）
    */
-  filterOpenAccess(works: Record<string, any>[]): Record<string, any>[] {
+  filterOpenAccess(works: Work[]): Work[] {
     return works.filter((work) => work.open_access?.is_oa === true);
   }
 
@@ -250,14 +251,14 @@ export class OpenAlexService {
   /**
    * 格式化文章列表（纯数据处理）
    */
-  private formatArticles(items: Work[]): Record<string, any>[] {
+  private formatArticles(items: Work[]): JsonRecord[] {
     return items.map((item) => this.formatSingleArticle(item));
   }
 
   /**
    * 格式化单篇文章（纯数据处理）
    */
-  private formatSingleArticle(item: Work): Record<string, any> {
+  private formatSingleArticle(item: Work): JsonRecord {
     const authors: string[] = [];
     const authorships = item.authorships || [];
     for (const authorship of authorships) {
@@ -267,9 +268,9 @@ export class OpenAlexService {
       }
     }
 
-    const primary_location = item.primary_location || {};
-    const source = primary_location.source || {};
-    const open_access = item.open_access || {};
+    const primary_location = item.primary_location || ({} as PrimaryLocation);
+    const source = primary_location.source || ({} as { display_name?: string });
+    const open_access = item.open_access || ({} as OpenAccessInfo);
 
     return {
       title: item.title || "",
@@ -287,4 +288,3 @@ export class OpenAlexService {
     };
   }
 }
-

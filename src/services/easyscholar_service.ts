@@ -1,6 +1,4 @@
-// @ts-nocheck
-/**
- * EasyScholar API 服务
+/** * EasyScholar API 服务
  *
  * EasyScholar 是一个中国学术期刊评级服务，提供：
  * - 期刊影响因子
@@ -14,7 +12,7 @@
 import axios, { AxiosError } from "axios";
 
 interface QualityMetrics {
-  [key: string]: any;
+  [key: string]: unknown;
   impact_factor?: number;
   quartile?: string;
   jci?: string;
@@ -46,7 +44,7 @@ interface ApiResponse {
   msg: string;
   data?: {
     officialRank?: {
-      all?: Record<string, any>;
+      all?: Record<string, unknown>;
     };
   };
 }
@@ -90,10 +88,7 @@ export class EasyScholarService {
    * @param timeout - 请求超时时间（秒）
    * @returns 包含期刊质量指标的字典
    */
-  async getJournalQuality(
-    journal_name: string,
-    timeout?: number,
-  ): Promise<JournalQualityResponse> {
+  async getJournalQuality(journal_name: string, timeout?: number): Promise<JournalQualityResponse> {
     if (!journal_name || !journal_name.trim()) {
       return {
         success: false,
@@ -224,14 +219,11 @@ export class EasyScholarService {
 
     for (const [api_field, internal_field] of Object.entries(this.FIELD_MAPPING)) {
       if (api_field in all_rank) {
-        let value = all_rank[api_field];
+        let value: unknown = all_rank[api_field];
 
-        if (internal_field === "impact_factor" && value) {
-          try {
-            value = parseFloat(value);
-          } catch {
-            value = null;
-          }
+        if (internal_field === "impact_factor" && value != null) {
+          const parsed = parseFloat(String(value));
+          value = Number.isNaN(parsed) ? null : parsed;
         }
 
         if (value !== null && value !== undefined) {
@@ -275,7 +267,7 @@ export class EasyScholarService {
     this.requestTimes = this.requestTimes.filter((t) => now - t < 1.0);
 
     if (this.requestTimes.length >= this.RATE_LIMIT_PER_SECOND) {
-      const sleepTime = 1.0 - (now - this.requestTimes[0]);
+      const sleepTime = 1.0 - (now - (this.requestTimes[0] ?? now));
       if (sleepTime > 0) {
         await new Promise((resolve) => setTimeout(resolve, sleepTime * 1000));
         this.requestTimes = [];
@@ -318,11 +310,8 @@ export class EasyScholarService {
    * @param quality_metrics - 质量指标
    * @returns 排名信息字典
    */
-  private calculateRankingInfo(
-    journal_name: string,
-    quality_metrics: QualityMetrics,
-  ): RankingInfo {
-    const impact_factor = quality_metrics.impact_factor as number | undefined || 0;
+  private calculateRankingInfo(journal_name: string, quality_metrics: QualityMetrics): RankingInfo {
+    const impact_factor = (quality_metrics.impact_factor as number | undefined) || 0;
     const quartile = (quality_metrics.quartile as string) || "";
 
     let rank: number;
@@ -366,4 +355,3 @@ export class EasyScholarService {
 export function createEasyScholarService(timeout: number = 30): EasyScholarService {
   return new EasyScholarService(timeout);
 }
-

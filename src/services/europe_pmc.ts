@@ -1,6 +1,5 @@
-// @ts-nocheck
 import { CacheManager, RateLimiter } from "../middleware/index.js";
-import { defaultApiClient } from "../utils/api_utils";
+import { defaultApiClient } from "../utils/api_utils.js";
 
 interface ArticleInfo {
   pmid: string;
@@ -74,10 +73,14 @@ export class EuropePMCService {
     for (const format of formats) {
       const match = dateStr.match(format);
       if (match) {
-        if (match[3].length === 4) {
-          return new Date(`${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`);
+        if ((match[3] ?? "").length === 4) {
+          return new Date(
+            `${match[3]}-${match[2]!.padStart(2, "0")}-${match[1]!.padStart(2, "0")}`,
+          );
         } else {
-          return new Date(`${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`);
+          return new Date(
+            `${match[1]}-${match[2]!.padStart(2, "0")}-${match[3]!.padStart(2, "0")}`,
+          );
         }
       }
     }
@@ -457,7 +460,6 @@ export class EuropePMCService {
           return {
             articles,
             total_count: hitCount,
-            error: undefined,
             message: `Found ${articles.length} related articles (total ${hitCount})`,
           };
         } catch (error) {
@@ -466,7 +468,6 @@ export class EuropePMCService {
             error: `Search failed: ${errorMsg}`,
             articles: [],
             total_count: 0,
-            message: undefined,
           };
         }
       },
@@ -485,7 +486,7 @@ export class EuropePMCService {
   ): ArticleDetailsResult {
     this.logger.info(`Fetching article details: ${idType}=${identifier}`);
 
-    const fetchFromApi = (): ArticleDetailsResult => {
+    const fetchFromApi = (): ArticleDetailsResult | Promise<ArticleDetailsResult> => {
       const maxRetries = 3;
       for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
@@ -534,7 +535,7 @@ export class EuropePMCService {
 
               const articleInfo = this.processEuropePMCArticle(results[0]);
               return articleInfo
-                ? { article: articleInfo, error: undefined }
+                ? { article: articleInfo }
                 : {
                     error: "Failed to process article information",
                     article: null,
@@ -584,7 +585,7 @@ export class EuropePMCService {
       }
     }
 
-    const result = fetchFromApi() as any;
+    const result = fetchFromApi() as unknown as ArticleDetailsResult;
     if (result.article) {
       this.cache.set(cacheKey, result.article);
       this.cacheExpiry.set(cacheKey, now + 24 * 60 * 60 * 1000);
@@ -663,7 +664,7 @@ export class EuropePMCService {
             await this.rateLimiter.schedule(async () => {});
 
             return articleInfo
-              ? { article: articleInfo, error: undefined }
+              ? { article: articleInfo }
               : {
                   error: "Failed to process article information",
                   article: null,

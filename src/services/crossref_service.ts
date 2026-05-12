@@ -1,9 +1,10 @@
-// @ts-nocheck
 /**
  * CrossRef API 服务 - 纯异步实现
  */
 
-import { defaultApiClient } from "../utils/api_utils";
+type JsonValue = any;
+
+import { defaultApiClient } from "../utils/api_utils.js";
 import { CacheManager } from "../middleware/index.js";
 
 /**
@@ -20,7 +21,7 @@ export class CrossRefService {
   /**
    * 格式化单篇文章
    */
-  private formatSingleArticle(item: Record<string, any>): Record<string, any> {
+  private formatSingleArticle(item: Record<string, JsonValue>): Record<string, JsonValue> {
     const title = this.extractTitle(item.title || []);
     const authors = this.extractAuthors(item.author || []);
 
@@ -42,21 +43,21 @@ export class CrossRefService {
   /**
    * 格式化文章列表
    */
-  private formatArticles(items: Record<string, any>[]): Record<string, any>[] {
+  private formatArticles(items: Record<string, JsonValue>[]): Record<string, JsonValue>[] {
     return items.map((item) => this.formatSingleArticle(item));
   }
 
   /**
    * 提取标题
    */
-  private extractTitle(titleList: any[]): string {
-    return titleList && titleList.length > 0 ? titleList[0] : "";
+  private extractTitle(titleList: unknown[]): string {
+    return titleList && titleList.length > 0 ? String(titleList[0]) : "";
   }
 
   /**
    * 提取作者
    */
-  private extractAuthors(authorList: any[]): string[] {
+  private extractAuthors(authorList: Record<string, JsonValue>[]): string[] {
     const authors: string[] = [];
     for (const author of authorList || []) {
       if (!author) continue;
@@ -72,7 +73,7 @@ export class CrossRefService {
   /**
    * 提取参考文献的作者
    */
-  private extractRefAuthors(ref: Record<string, any>): string[] {
+  private extractRefAuthors(ref: Record<string, JsonValue>): string[] {
     const authors: string[] = [];
     const authorList = ref.author;
     if (Array.isArray(authorList)) {
@@ -94,7 +95,7 @@ export class CrossRefService {
   /**
    * 提取参考文献的年份
    */
-  private extractRefYear(ref: Record<string, any>): string {
+  private extractRefYear(ref: Record<string, JsonValue>): string {
     if (ref.year) {
       return String(ref.year);
     }
@@ -194,7 +195,7 @@ export class CrossRefService {
   /**
    * 异步通过 DOI 获取文献详情
    */
-  public async getWorkByDoiAsync(doi: string): Promise<Record<string, any>> {
+  public async getWorkByDoiAsync(doi: string): Promise<Record<string, JsonValue>> {
     const cacheKey = `crossref_doi_${doi}`;
 
     return this.cacheManager.getCachedOrFetch(

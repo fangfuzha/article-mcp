@@ -1,10 +1,9 @@
-// @ts-nocheck
 /**
  * arXiv 文献搜索服务
  * 基于 arXiv API 的学术文献搜索功能
  */
 
-import axios, { AxiosInstance } from "axios";
+import axios, { type AxiosInstance } from "axios";
 import axiosRetry from "axios-retry";
 import { parseISO, format } from "date-fns";
 import { XMLParser } from "fast-xml-parser";
@@ -54,7 +53,7 @@ export class ArxivSearchService {
       retryCondition: (error) => {
         return (
           axiosRetry.isNetworkOrIdempotentRequestError(error) ||
-          (error.response && [429, 500, 502, 503, 504].includes(error.response.status))
+          (error.response ? [429, 500, 502, 503, 504].includes(error.response.status) : false)
         );
       },
     });
@@ -85,7 +84,7 @@ export class ArxivSearchService {
   /**
    * 处理单个 arXiv 条目
    */
-  private processArxivEntry(entry: any): Record<string, any> | null {
+  private processArxivEntry(entry: any): Record<string, unknown> | null {
     try {
       const xmlObj = entry as any;
 
@@ -167,7 +166,7 @@ export class ArxivSearchService {
     end_date?: string;
     max_results?: number;
     use_cache?: boolean;
-  }): Promise<Record<string, any>> {
+  }): Promise<Record<string, unknown>> {
     const { keyword, email, start_date, end_date, max_results = 10, use_cache = true } = params;
 
     // 验证关键词
@@ -222,7 +221,8 @@ export class ArxivSearchService {
                 const endStr = format(endDt, "yyyyMMdd") + "2359";
                 const dateFilter = `submittedDate:[${startStr} TO ${endStr}]`;
                 searchQueryParts.push(dateFilter);
-              } catch (error: any) {
+              } catch (err) {
+                const error = err instanceof Error ? err : new Error(String(err));
                 return {
                   articles: [],
                   total_count: 0,
@@ -259,7 +259,7 @@ export class ArxivSearchService {
               try {
                 const response = await this.session.get(url, { headers });
 
-                const contentType = response.headers["content-type"] || "";
+                const contentType = String(response.headers["content-type"] || "");
                 if (!contentType.includes("application/atom+xml")) {
                   console.error(`意外的响应内容类型: ${contentType}`);
                   return {
@@ -294,8 +294,12 @@ export class ArxivSearchService {
                   console.info("获取到的结果数少于请求数，认为是最后一页");
                   break;
                 }
-              } catch (error: any) {
-                if (error.code === "ECONNABORTED" || error.message.includes("timeout")) {
+              } catch (err) {
+                const error = err as { code?: string; message?: string };
+                if (
+                  error.code === "ECONNABORTED" ||
+                  (error.message && error.message.includes("timeout"))
+                ) {
                   return {
                     articles: [],
                     total_count: 0,
@@ -323,7 +327,8 @@ export class ArxivSearchService {
                 max_results,
               },
             };
-          } catch (error: any) {
+          } catch (err) {
+            const error = err instanceof Error ? err : new Error(String(err));
             console.error(`arXiv 搜索失败: ${error.message}`);
             return {
               articles: [],
