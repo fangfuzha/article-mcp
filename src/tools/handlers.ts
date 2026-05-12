@@ -685,10 +685,17 @@ async function resolveArticleIdentifiers(
 function buildRelationNetwork(relations: Array<Record<string, unknown>>): {
   nodes: Array<Record<string, unknown>>;
   edges: Array<Record<string, unknown>>;
-  clusters: Record<string, unknown>;
+  clusters: Record<string, Array<Record<string, unknown>>>;
+  metrics: {
+    centrality: Record<string, number>;
+    citationStrength: Record<string, number>;
+    density: number;
+  };
 } {
   const nodes = new Map<string, Record<string, unknown>>();
   const edges: Array<Record<string, unknown>> = [];
+  const degreeCount = new Map<string, number>();
+  const citationCount = new Map<string, number>();
 
   for (const relation of relations) {
     const sourceId = String(relation.identifier);
@@ -715,15 +722,102 @@ function buildRelationNetwork(relations: Array<Record<string, unknown>>): {
           target: targetId,
           relation: relationType,
         });
+
+        // 统计度数和引用强度
+        degreeCount.set(sourceId, (degreeCount.get(sourceId) ?? 0) + 1);
+        degreeCount.set(targetId, (degreeCount.get(targetId) ?? 0) + 1);
+        citationCount.set(sourceId, (citationCount.get(sourceId) ?? 0) + 1);
       }
     }
+  }
+
+  const totalEdges = edges.length;
+  const totalPossibleEdges = nodes.size * (nodes.size - 1);
+  const density = totalPossibleEdges > 0 ? Number((totalEdges / totalPossibleEdges).toFixed(4)) : 0;
+
+  // 计算中心度：度中心度 = 节点度数 / 最大度数
+  const maxDegree = Math.max(...degreeCount.values(), 1);
+  const centrality: Record<string, number> = {};
+  for (const [nodeId, degree] of degreeCount) {
+    centrality[nodeId] = Number((degree / maxDegree).toFixed(4));
+  }
+
+  // 计算引用强度：归一化引用次数
+  const maxCitations = Math.max(...citationCount.values(), 1);
+  const citationStrength: Record<string, number> = {};
+  for (const [nodeId, count] of citationCount) {
+    citationStrength[nodeId] = Number((count / maxCitations).toFixed(4));
   }
 
   return {
     nodes: Array.from(nodes.values()),
     edges,
-    clusters: {},
+    clusters: buildClusters(edges),
+    metrics: { centrality, citationStrength, density },
   };
+}
+
+/**
+ * 基于边的连通性构建聚类。
+ * 将共享至少一个节点的边分组到同一聚类中。
+ */
+function buildClusters(
+  edges: Array<Record<string, unknown>>,
+): Record<string, Array<Record<string, unknown>>> {
+  const nodeToEdge = new Map<string, number[]>();
+
+  for (let i = 0; i < edges.length; i++) {
+    const edge = edges[i];
+    if (!edge) {
+      continue;
+    }
+    const source = String(edge.source);
+    const target = String(edge.target);
+    if (!nodeToEdge.has(source)) {
+      nodeToEdge.set(source, []);
+    }
+    if (!nodeToEdge.has(target)) {
+      nodeToEdge.set(target, []);
+    }
+    nodeToEdge.get(source)!.push(i);
+    nodeToEdge.get(target)!.push(i);
+  }
+
+  const visited = new Set<number>();
+  let clusterIndex = 0;
+  const clusters: Record<string, Array<Record<string, unknown>>> = {};
+
+  const visitEdge = (edgeIndex: number): void => {
+    if (visited.has(edgeIndex)) {
+      return;
+    }
+    visited.add(edgeIndex);
+    const edge = edges[edgeIndex];
+    if (edge) {
+      const key = String(clusterIndex);
+      if (!clusters[key]) {
+        clusters[key] = [];
+      }
+      clusters[key]!.push(edge);
+
+      // BFS 遍历相连节点
+      for (const nodeId of [edge.source, edge.target]) {
+        const connectedEdges = nodeToEdge.get(String(nodeId)) ?? [];
+        for (const connectedIndex of connectedEdges) {
+          visitEdge(connectedIndex);
+        }
+      }
+    }
+  };
+
+  for (let i = 0; i < edges.length; i++) {
+    if (!visited.has(i)) {
+      visitEdge(i);
+      clusterIndex++;
+    }
+  }
+
+  return clusters;
 }
 
 async function buildRelationNetworkData(
@@ -735,7 +829,12 @@ async function buildRelationNetworkData(
 ): Promise<{
   nodes: Array<Record<string, unknown>>;
   edges: Array<Record<string, unknown>>;
-  clusters: Record<string, unknown>;
+  clusters: Record<string, Array<Record<string, unknown>>>;
+  metrics: {
+    centrality: Record<string, number>;
+    citationStrength: Record<string, number>;
+    density: number;
+  };
 }> {
   const network = buildRelationNetwork(relations);
 
@@ -843,6 +942,7 @@ async function buildRelationNetworkData(
     nodes: Array.from(nodes.values()),
     edges,
     clusters: {},
+    metrics: { centrality: {}, citationStrength: {}, density: 0 },
   };
 }
 

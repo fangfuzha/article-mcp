@@ -603,6 +603,11 @@ describe("tool handlers", () => {
     expect(result.network_data.edges[0]).toMatchObject({
       source: "10.1000/source",
     });
+    expect(result.network_data.metrics).toBeDefined();
+    expect(result.network_data.metrics.centrality).toBeTypeOf("object");
+    expect(result.network_data.metrics.density).toBeTypeOf("number");
+    expect(result.network_data.metrics.citationStrength).toBeTypeOf("object");
+    expect(typeof result.network_data.clusters).toBe("object");
   });
 
   it("expands relation networks when max_depth is greater than one", async () => {
