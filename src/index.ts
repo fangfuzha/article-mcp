@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { config } from "dotenv";
 
+import { registerArticleMcpResources } from "./resources/index.js";
 import { registerArticleMcpTools } from "./tools/index.js";
 
 config();
@@ -21,6 +22,7 @@ export function createArticleMcpServer(): McpServer {
   });
 
   registerArticleMcpTools(server);
+  registerArticleMcpResources(server);
 
   return server;
 }
