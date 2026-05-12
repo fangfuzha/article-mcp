@@ -18,6 +18,13 @@ type SearchStrategy = {
   mergeStrategy: "union" | "intersection";
 };
 
+type ArticleDetailResult = {
+  article: unknown | null;
+  fulltextFetched: boolean;
+};
+
+const ARTICLE_DETAILS_CONCURRENCY = 5;
+
 const DEFAULT_SEARCH_STRATEGY: SearchStrategy = {
   defaultSources: ["europe_pmc", "pubmed", "arxiv", "crossref", "openalex"],
   maxResultsPerSource: 10,
@@ -190,20 +197,24 @@ async function handleGetArticleDetails(
     });
   }
 
-  const articles = await Promise.all(
-    pmcidList.map(async (pmcid) => {
+  const articleResults = await mapWithConcurrency<string, ArticleDetailResult>(
+    pmcidList,
+    ARTICLE_DETAILS_CONCURRENCY,
+    async (pmcid) => {
       const normalizedPmcid = normalizePmcid(pmcid);
       if (!normalizedPmcid) {
-        return null;
+        console.warn(`非 PMCID 格式: ${pmcid}`);
+        return { article: null, fulltextFetched: false };
       }
 
       const result = await services.europePmc.getArticleDetailsAsync(normalizedPmcid, "pmcid");
       const article = result.article;
       if (!article) {
-        return null;
+        return { article: null, fulltextFetched: false };
       }
 
       const fulltext = await services.pubmed.getPMCFulltextHtmlAsync(normalizedPmcid, sectionList);
+      let fulltextFetched = false;
       if (fulltext.fulltext_available) {
         const content = selectFulltextContent(fulltext, args.format);
         (article as unknown as Record<string, unknown>).fulltext = {
@@ -218,16 +229,17 @@ async function handleGetArticleDetails(
               }
             : {}),
         };
+        fulltextFetched = true;
       }
 
-      return article;
-    }),
+      return { article, fulltextFetched };
+    },
   );
 
-  const successfulArticles = articles.filter((article) => Boolean(article));
-  const fulltextFetched = successfulArticles.filter(
-    (article) => isRecord(article) && isRecord(article.fulltext),
-  ).length;
+  const successfulArticles = articleResults
+    .map((result) => result.article)
+    .filter((article) => Boolean(article));
+  const fulltextFetched = articleResults.filter((result) => result.fulltextFetched).length;
 
   return textResult({
     total: pmcidList.length,
@@ -237,6 +249,7 @@ async function handleGetArticleDetails(
     fulltext_stats: {
       has_pmcid: successfulArticles.length,
       fulltext_fetched: fulltextFetched,
+      no_fulltext: successfulArticles.length - fulltextFetched,
     },
     processing_time: Math.round(((Date.now() - startTime) / 1000) * 1000) / 1000,
   });
@@ -500,6 +513,37 @@ function selectFulltextContent(fulltext: Record<string, unknown>, format: string
     return fulltext.fulltext_text;
   }
   return fulltext.fulltext_markdown;
+}
+
+/**
+ * Maps items with a maximum number of in-flight async tasks.
+ *
+ * @param items Items to process.
+ * @param concurrency Maximum number of simultaneously running mapper calls.
+ * @param mapper Async mapper for one item.
+ * @returns Mapped results in the same order as the input items.
+ */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  const worker = async (): Promise<void> => {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await mapper(items[currentIndex]!, currentIndex);
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => worker()),
+  );
+
+  return results;
 }
 
 function articleKey(article: Record<string, unknown>): string | null {

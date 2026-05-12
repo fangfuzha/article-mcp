@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { ArticleMcpServices } from "../src/services/container.js";
@@ -261,6 +261,74 @@ describe("tool handlers", () => {
       content: "Methods Text body",
       sections_requested: ["methods"],
     });
+  });
+
+  it("counts invalid PMCIDs as failed and warns", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const handlers = createToolHandlers(createMockServices());
+
+    try {
+      const result = parseTextResult(
+        await handlers.get_article_details!({
+          pmcid: ["invalid", "123"],
+        }),
+      );
+
+      expect(result.total).toBe(2);
+      expect(result.successful).toBe(1);
+      expect(result.failed).toBe(1);
+      expect(result.articles[0].pmcid).toBe("PMC123");
+      expect(warnSpy).toHaveBeenCalledWith("非 PMCID 格式: invalid");
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("rejects batches larger than 20 PMCIDs before fetching", async () => {
+    let detailCalls = 0;
+    const services = createMockServices();
+    services.europePmc.getArticleDetailsAsync = async () => {
+      detailCalls += 1;
+      return { article: null };
+    };
+
+    const handlers = createToolHandlers(services);
+    const result = parseTextResult(
+      await handlers.get_article_details!({
+        pmcid: Array.from({ length: 21 }, (_value, index) => `PMC${index + 1}`),
+      }),
+    );
+
+    expect(result.total).toBe(21);
+    expect(result.successful).toBe(0);
+    expect(result.failed).toBe(21);
+    expect(result.articles).toEqual([]);
+    expect(result.error).toContain("最多支持20个");
+    expect(detailCalls).toBe(0);
+  });
+
+  it("reports articles that have metadata but no available fulltext", async () => {
+    const services = createMockServices();
+    services.pubmed.getPMCFulltextHtmlAsync = async () => ({
+      pmc_id: "PMC123",
+      fulltext_available: false,
+      error: "No fulltext available",
+    });
+
+    const handlers = createToolHandlers(services);
+    const result = parseTextResult(
+      await handlers.get_article_details!({
+        pmcid: "PMC123",
+      }),
+    );
+
+    expect(result.successful).toBe(1);
+    expect(result.fulltext_stats).toEqual({
+      has_pmcid: 1,
+      fulltext_fetched: 0,
+      no_fulltext: 1,
+    });
+    expect(result.articles[0]).not.toHaveProperty("fulltext");
   });
 
   it("deduplicates references and strips metadata when requested", async () => {

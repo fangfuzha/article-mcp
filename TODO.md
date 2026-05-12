@@ -12,7 +12,7 @@ Python 到 Node 的迁移尚未完成。
 
 - [x] `npm run typecheck`：执行 TypeScript 类型检查，已通过。
 - [x] `npm run lint`：执行 ESLint 代码规范检查，已通过。
-- [x] `npm test`：执行 Vitest 测试，已通过，目前只有工具定义相关测试。
+- [x] `npm test`：执行 Vitest 测试，已通过，覆盖工具定义、缓存中间件和工具处理器边界行为。
 - [x] `npm run version:check`：检查 `package.json` 与 `src/index.ts` 版本一致性，已通过。
 - [x] `npm run build`：执行 tsup 构建，已通过。
 - [x] `npm run test:mcp`：启动编译后的 stdio MCP 服务并检查工具清单，已通过，得分 100/100。
@@ -30,7 +30,7 @@ Python 到 Node 的迁移尚未完成。
   - `PubMedService.getPMCFulltextHtmlAsync()` 目前只是粗略剥离 XML 标签，`sections_found` 和 `sections_missing` 为空，未等价迁移 `html_to_markdown.py` 的转换能力。
   - 需要支持字符串化 PMCID 数组容错、PMCID 格式校验、最多 20 个 PMCID 的错误返回、并发限制、`fulltext_stats`、`processing_time`。
   - 验收标准：`markdown/xml/text` 三种格式、单章节、多章节、无全文、非法 PMCID、批量超过 20 个场景均有测试。
-  - 进展：已支持字符串化 PMCID 数组、PMCID 归一化、20 个上限、`sections` 传递、`markdown/xml/text` 内容选择、`fulltext_stats` 和处理时间；PubMed 全文服务已能按常见章节标题提取内容。仍需迁移 Python 版更完整的 HTML/XML 转 Markdown 能力，并补齐无全文、非法 PMCID 等更多测试。
+  - 进展：已支持字符串化 PMCID 数组、PMCID 归一化、20 个上限、`sections` 传递、`markdown/xml/text` 内容选择、`fulltext_stats` 和处理时间；已补齐非法 PMCID 失败计数、批量超限提前返回、`no_fulltext` 统计和对应测试；PubMed 全文服务已能按常见章节标题提取内容。仍需迁移 Python 版更完整的 HTML/XML 转 Markdown 能力。
 
 - [ ] 补齐 `get_references` 的统一参考文献服务。
   - Python 版通过 `reference_service` 做 DOI 引用、CrossRef 引用、Europe PMC 引用、多源并发、智能去重和 `include_metadata` 控制。
