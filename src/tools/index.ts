@@ -1,6 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import { createErrorBoundaryMiddleware, ToolExecutionPipeline } from "../middleware/index.js";
+import {
+  createErrorBoundaryMiddleware,
+  createLoggingMiddleware,
+  createTimingMiddleware,
+  ToolExecutionPipeline,
+} from "../middleware/index.js";
 import { createArticleMcpServices } from "../services/container.js";
 import { TOOL_DEFINITIONS, type ArticleMcpToolName } from "./definitions.js";
 import { createToolHandlers } from "./handlers.js";
@@ -28,7 +33,11 @@ const TOOL_RUNTIME_SCHEMAS = {
 export function registerArticleMcpTools(server: McpServer): void {
   const services = createArticleMcpServices();
   const handlers = createToolHandlers(services);
-  const pipeline = new ToolExecutionPipeline([createErrorBoundaryMiddleware()]);
+  const pipeline = new ToolExecutionPipeline([
+    createErrorBoundaryMiddleware(),
+    createLoggingMiddleware(),
+    createTimingMiddleware(),
+  ]);
 
   for (const tool of TOOL_DEFINITIONS) {
     const toolName = tool.name as ArticleMcpToolName;

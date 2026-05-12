@@ -1,127 +1,138 @@
-# Node 迁移后续 TODO
+# 迁移 TODO（按架构层组织）
 
 ## 当前结论
 
-Python 到 Node 的迁移尚未完成。
+Python 到 Node 的迁移**尚未完成**。当前 Node 版更接近"可运行的迁移版基础实现"，还不是"完整替代 Python 版"的状态。
 
 已完成的是 Node.js + TypeScript 项目骨架、MCP stdio 入口、5 个核心工具注册、基础参数校验、主要数据源服务的初版迁移、构建与发布脚本、基础 MCP 合规检查。当前项目可以通过类型检查、Lint、构建、单元测试和工具清单级 MCP 合规检查。
 
-未完成的是与 Python 版的行为等价、深层业务逻辑、资源接口、缓存语义、测试覆盖和类型质量。Node 版目前更接近“可运行的迁移版基础实现”，还不是“完整替代 Python 版”的状态。
+未完成的是与 Python 版的**外部表现和内部架构严格对齐**——这是迁移的核心目标。Node 版目前需要补齐的主要缺口：中间件时序层（`processing_time`/`timestamp` 自动注入）、MCP Resources（config://、journals://、stats://）、文件搜索缓存（SearchCache）、以及剩余工具层行为差异。
 
 ## 已验证命令
 
 - [x] `npm run typecheck`：执行 TypeScript 类型检查，已通过。
 - [x] `npm run lint`：执行 ESLint 代码规范检查，已通过。
-- [x] `npm test`：执行 Vitest 测试，已通过，覆盖工具定义、缓存中间件和工具处理器边界行为。
+- [x] `npm test`：执行 Vitest 测试，已通过。
 - [x] `npm run version:check`：检查 `package.json` 与 `src/index.ts` 版本一致性，已通过。
 - [x] `npm run build`：执行 tsup 构建，已通过。
 - [x] `npm run test:mcp`：启动编译后的 stdio MCP 服务并检查工具清单，已通过，得分 100/100。
 
-## P0：迁移完成前必须补齐
+---
 
-- [ ] 补齐 `search_literature` 的 Python 版行为等价。
-  - 当前 Node 处理器接受 `search_type` 和 `use_cache`，但未真正按策略切换数据源、结果数、合并策略和缓存开关。
-  - 需要迁移 Python 版 `SEARCH_STRATEGIES`、并行搜索、`union/intersection` 合并、按 DOI 合并去重、简单排序和 `cache_hit` 语义。
-  - 验收标准：`comprehensive`、`fast`、`precise`、`preprint` 四种策略输出与 Python 版语义一致，并有单元测试覆盖。
-  - 进展：已在 Node 工具处理器中补入四种搜索策略、并行搜索、`union/intersection` 合并、按 DOI/标题去重和策略测试；已补齐 Europe PMC、PubMed、arXiv、CrossRef 搜索的 `use_cache=false` 绕过缓存语义、服务级 `cache_hit` 汇总和 Python 版源优先级排序。后续仍可继续补全全局搜索缓存与更多策略断言。
+## 1. Middleware Stack（架构必须对齐）
 
-- [ ] 补齐 `get_article_details` 的全文格式与章节处理。
-  - 当前 Node 处理器解析了 `sections` 和 `format`，但没有传给全文服务，也没有只返回指定格式内容。
-  - `PubMedService.getPMCFulltextHtmlAsync()` 目前只是粗略剥离 XML 标签，`sections_found` 和 `sections_missing` 为空，未等价迁移 `html_to_markdown.py` 的转换能力。
-  - 需要支持字符串化 PMCID 数组容错、PMCID 格式校验、最多 20 个 PMCID 的错误返回、并发限制、`fulltext_stats`、`processing_time`。
-  - 验收标准：`markdown/xml/text` 三种格式、单章节、多章节、无全文、非法 PMCID、批量超过 20 个场景均有测试。
-  - 进展：已支持字符串化 PMCID 数组、PMCID 归一化、20 个上限、`sections` 传递、`markdown/xml/text` 内容选择、`fulltext_stats` 和处理时间；已补齐非法 PMCID 失败计数、批量超限提前返回、`no_fulltext` 统计和对应测试；PubMed 全文服务已能按常见章节标题提取内容；已新增 Node 版 `html_to_markdown` 模块，并补齐 `sections=None`、空章节列表、缺失章节与单章节提取的服务层测试。仍需继续提升 HTML/XML 到 Markdown 的复杂结构转换质量，并迁移更多 Python 全文转换测试。
+**Python 现状：** 三个中间件按序执行：MCPErrorHandling → Logging → Timing。TimingMiddleware 自动为每个 `dict` 结果注入 `processing_time` 和 `timestamp`。LoggingMiddleware 记录每个请求的耗时和状态。
 
-- [ ] 补齐 `get_references` 的统一参考文献服务。
-  - Python 版通过 `reference_service` 做 DOI 引用、CrossRef 引用、Europe PMC 引用、多源并发、智能去重和 `include_metadata` 控制。
-  - 当前 Node 版直接调用 CrossRef/PubMed/Europe PMC，Europe PMC references endpoint 已接入，但 `reference_service` 的统一编排和 `include_metadata` 的完整语义仍未完全等价。
-  - 需要迁移 `reference_service.py` 的核心逻辑，支持 DOI/PMID/PMCID 自动识别和转换路径。
-  - 验收标准：DOI、PMID、PMCID 三类输入均可返回去重后的 `merged_references`，并能关闭详细元数据。
-  - 进展：已补入 `id_type=auto` 识别、多源并发、参考文献按 DOI/标题去重、来源优先级排序和 `include_metadata=false` 字段裁剪测试；`include_metadata=false` 现已同时裁剪 `merged_references` 与 `references_by_source` 的详细字段；PMID/PMCID 输入会先通过 Europe PMC 解析 DOI，再进入 CrossRef 查询链路；CrossRef 参考文献 DOI 会批量查询 Europe PMC 补充摘要、PMID、PMCID 等元数据，并在去重时优先保留 Europe PMC 结果；已接入真正的 Europe PMC references endpoint，支持 DOI/PMID/PMCID 路径解析和直接参考文献抓取；已新增 Node 版 `UnifiedReferenceService`，把 `get_references` 的标识符解析、多源编排、去重与元数据裁剪下沉到服务层。仍需完整迁移 `reference_service.py` 的剩余统一编排逻辑。
+**Node 现状：** 只有 ErrorBoundaryMiddleware。无 Timing/Logging 等价物。
 
-- [ ] 补齐 `get_literature_relations` 的关系分析。
-  - 当前 Node 版只返回 CrossRef references 和 OpenAlex citing，未实现 `similar`，也未按 `relation_types` 过滤。
-  - `analysis_type=network/comprehensive`、`max_depth`、PMID/PMCID 到 DOI 转换、网络节点边和指标均未迁移。
-  - 需要迁移 Python 版 `relation_tools.py` 和 `similar_articles.py` 的核心行为，或明确删减并同步文档。
-  - 验收标准：`references`、`similar`、`citing` 可独立选择；批量与网络分析有稳定输出结构和测试。
-  - 进展：已按 `relation_types` 控制 `references`、`citing`、`similar` 字段输出，并补测试；`similar` 已接入 PubMed E-utils 相似文献查询；DOI 会解析 PMID，PMID/PMCID 会解析 DOI；`references` 分支已开始复用统一参考文献服务，向 Python `relation_tools.py` 调用工具3逻辑的结构靠拢；`analysis_type=network/comprehensive` 会返回基础 `network_data.nodes/edges/clusters`，且 `max_depth>1` 时会继续展开引用网络。仍需迁移 Python 版完整网络指标、聚类和更细的 PMID/PMCID 转 DOI 兜底链路。
+**对齐目标：** `ToolExecutionPipeline` 应先注册 TimingMiddleware，再通过 createLoggingMiddleware 记录请求日志，最后用 ErrorBoundaryMiddleware 兜底异常。每个工具结果应自动包含 `processing_time` 和 `timestamp`。
 
-- [ ] 补齐 `get_journal_quality` 的缓存、指标过滤和排序。
-  - 当前 Node 版调用 EasyScholar 与 OpenAlex，但 `include_metrics` 只回显不筛选；`use_cache` 仅传给 OpenAlex，EasyScholar 没有缓存；`sort_by/sort_order` 未实现。
-  - Python 版有文件缓存、批量排序、可用指标集合和缓存资源。
-  - 验收标准：单期刊和批量期刊都按 `include_metrics` 过滤，批量排序正确，`use_cache=false` 能绕过缓存。
-  - 进展：已实现 `include_metrics` 指标筛选、OpenAlex `use_cache` 传递、批量 `sort_by/sort_order` 排序和测试。EasyScholar 文件缓存及缓存资源仍未迁移。
+- [ ] 补齐 `createTimingMiddleware`——在工具结果（`CallToolResult`）的 `content[0].text` JSON 对象中注入 `processing_time` 和 `timestamp`。
+- [ ] 补齐 `createLoggingMiddleware`——使用 `console.error`（stderr）记录请求方法、耗时和状态。
+- [ ] 验证：每个工具响应包含 `processing_time` 和 `timestamp`；stderr 有请求日志。
 
-## P1：协议与资源能力补齐
+---
 
-- [ ] 迁移 MCP resources。
-  - Python 版提供 `config://version`、`config://status`、`config://tools`、`journals://{journal_name}/quality`、`stats://cache`。
-  - Node 版当前没有资源注册。
-  - 验收标准：MCP 客户端可列出并读取上述资源，合规脚本覆盖资源清单。
+## 2. MCP Resources（协议层必须对齐）
 
-- [ ] 补齐配置加载能力。
-  - Python 版有 `mcp_config.py`，支持从 MCP 客户端配置读取环境变量和默认配置。
-  - Node 版当前主要依赖 `.env` 和 `process.env`。
-  - 验收标准：文档明确 Node 版配置来源；如保留 Python 版能力，则实现等价配置读取。
+**Python 现状：** 提供 5 个资源 URIs：`config://version`、`config://status`、`config://tools`、`journals://{journal_name}/quality`、`stats://cache`。
 
-- [ ] 统一缓存策略。
-  - 当前 Node 版主要是进程内 `Map` 缓存，Python 版搜索和期刊质量有文件缓存及缓存统计。
-  - 需要决定 Node 版是否继续使用文件缓存；如果使用，补齐 TTL、目录、并发安全和统计资源。
-  - 验收标准：`use_cache` 在所有声明支持的工具中语义一致。
+**Node 现状：** 没有注册任何资源。
 
-- [ ] 统一错误返回结构。
-  - 当前多数服务吞掉异常并返回 `{ success: false, error }`，工具层又有 MCP error boundary。
-  - 需要定义哪些错误作为工具正常结果，哪些作为 MCP `isError`。
-  - 验收标准：非法参数、上游超时、无结果、鉴权缺失四类错误结构一致。
+**对齐目标：** 使用 `@modelcontextprotocol/sdk` 的 `server.resource()` 或 `server.resourceTemplate()` 注册等价资源。
 
-## P2：类型质量与代码整理
+- [ ] 注册 `config://version`——返回 `"0.2.2"`。
+- [ ] 注册 `config://status`——返回 `{ status, server, version, timestamp, supported_data_sources }`。
+- [ ] 注册 `config://tools`——返回工具列表（名称、描述、类别）。
+- [ ] 注册 `journals://{journal_name}/quality`——从文件缓存读取期刊质量；无缓存时返回基础提示。
+- [ ] 注册 `stats://cache`——统计缓存目录的文件数、大小、最近访问时间。
+- [ ] 验证：`npm run test:mcp` 能列出并读取上述资源。
 
-- [ ] 移除服务层 `// @ts-nocheck`。
-  - 当前 `arxiv_search.ts`、`crossref_service.ts`、`easyscholar_service.ts`、`europe_pmc.ts`、`openalex_service.ts` 均关闭类型检查。
-  - 需要逐个补类型、修 NodeNext `.js` 导入、消除隐式 `any` 和错误的同步/异步混用。
-  - 验收标准：服务层无 `@ts-nocheck`，`npm run typecheck` 仍通过。
+---
 
-- [ ] 删除或重构明显的迁移残留。
-  - `EuropePMCService.getArticleDetailsSync()` 内部实际返回 Promise，且被 `@ts-nocheck` 掩盖。
-  - 多处注释仍使用英文或中英混杂；按项目要求，除专有名词外注释应使用中文。
-  - 验收标准：无伪同步接口，注释风格统一。
+## 3. 缓存层（Python SearchCache 文件缓存）
 
-- [ ] 抽出共享数据模型。
-  - 多个服务重复定义 `ArticleInfo`、`SearchResult` 等结构，字段名不完全一致。
-  - 需要建立 `src/types` 或服务内公共模型，统一 `pmcid/pmc_id`、`journal/journal_name`、`publication_date` 等字段。
-  - 验收标准：工具层不需要为每个数据源写大量字段兼容逻辑。
+**Python 现状：** `SearchCache` 类（`search_tools.py`）使用 SHA256 哈希作为缓存键，24 小时 TTL，文件系统缓存存储在 `~/.article_mcp_cache/`。同时记录 `hits`/`misses` 统计供 `stats://cache` 资源使用。
 
-- [ ] 控制 MCP stdio 日志。
-  - 服务层大量使用 `console.log/info/warn/error`。stdio MCP 对 stdout 敏感，日志应避免污染协议通道。
-  - 验收标准：普通日志走 stderr 或可注入 logger；stdout 只用于 MCP 协议。
+**Node 现状：** 只有进程内 `Map` 缓存（`CacheManager`），无文件持久化。
+
+**对齐目标：** 新增 `SearchCache`（`src/middleware/search_cache.ts`），支持 SHA256 键生成、文件存储、TTL 过期、命中/未命中统计。`stats://cache` 资源从中读取统计。
+
+- [ ] 实现 `SearchCache` 类（文件 I/O 使用 `fs/promises`）。
+- [ ] 集成到 `search_literature` 工具处理器的搜索路径。
+- [ ] 验证：搜索后文件出现在 `~/.article_mcp_cache/`；缓存命中时跳过 API 调用。
+
+---
+
+## 4. 工具层行为对齐（P0 剩余语义）
+
+### 4.1 `search_literature`
+
+**已对齐：** 四种搜索策略、并行搜索、union/intersection 合并、DOI/标题去重、源优先级排序、`use_cache=false` 绕过缓存、服务级 `cache_hit` 汇总。
+
+**仍缺：** 文件 SearchCache 集成（见第 3 节），与 Python `SearchCache` 行为等价。
+
+- [ ] 集成 `SearchCache` 到 `search_literature` 的搜索路径。
+- [ ] 迁移 Python `test_search_tools_improvements.py` 中与缓存/策略相关的测试。
+
+### 4.2 `get_article_details`
+
+**已对齐：** PMCID 归一化、20 个上限、并发限制 5、`fulltext_stats`、`sections` 参数传递、三种格式输出、非法 PMCID 统计、`no_fulltext` 统计、`sections=None`/空章节语义、`html_to_markdown` 独立模块。
+
+**仍缺：** 更完整的 HTML/XML 复杂结构到 Markdown 的转换质量（如公式、表格、列表等深层结构）。
+
+- [ ] 提升 `convertPmcXmlToMarkdown` 的复杂结构转换（公式、表格、列表）。
+- [ ] 迁移更多 Python `test_article_tools_format_param.py` 和 `test_article_tools_pmcid_normalization.py` 的测试。
+
+### 4.3 `get_references`
+
+**已对齐：** `UnifiedReferenceService` 编排标识符解析、多源并发、Europe PMC references endpoint、Europe PMC 批量元数据补全、DOI/标题去重、源排序、`include_metadata` 裁剪（含 `references_by_source`）。
+
+**仍缺：** 暂无显著行为缺口。Python `reference_service.py` 的剩余编排逻辑已基本等价。
+
+- [ ] 无新增行为改动——如有回归风险，补测即可。
+
+### 4.4 `get_literature_relations`
+
+**已对齐：** `relation_types` 独立选择、`references` 复用统一参考文献服务、`similar` 接入 PubMed E-utils、DOI/PMID/PMCID 互转、`network_data` 基础节点/边/聚类、`max_depth>1` 引用网络展开。
+
+**仍缺：** 更完整的网络分析指标和聚类算法，`max_depth` 对 `citing` 和 `similar` 分支的支持。
+
+- [ ] 补齐网络分析指标（中心度、引用强度等）和聚类算法。
+- [ ] 让 `max_depth` 也影响 `citing` 和 `similar` 分支。
+
+### 4.5 `get_journal_quality`
+
+**已对齐：** `include_metrics` 筛选、OpenAlex `use_cache` 传递、批量 `sort_by/sort_order` 排序。
+
+**仍缺：** EasyScholar 文件缓存（FileLock 保护）；Python 版 `EasyScholarService` 使用文件缓存 + `smart_open` 并发保护。
+
+- [ ] 补齐 EasyScholar 文件缓存，与 `SearchCache` 共用缓存目录 `~/.article_mcp_cache/`。
+- [ ] 迁移 Python `test_quality_tools_sorting.py` 的测试。
+
+---
+
+## 5. 类型质量与服务层清理
+
+**Python 现状：** 纯动态类型（Python 无编译期类型检查），但服务层结构清晰、无未使用的同步伪接口。
+
+**Node 现状：** 5 个服务文件使用 `// @ts-nocheck` 关闭类型检查。
+
+- [ ] 逐个移除 `@ts-nocheck`，补齐缺失类型、修复 NodeNext `.js` 导入、消除隐式 `any`。
+- [ ] `EuropePMCService.getArticleDetailsSync()` 改为真正的异步方法或删除。
+- [ ] 注释统一为中文（除专有名词外）。
+- [ ] 抽出共享数据模型 `src/types/`，统一字段名。
+
+---
+
+## 6. 发布前收口
+
+- [ ] 更新 `src/index.ts` 中注册 resources。
+- [ ] `npm run test:mcp` 覆盖资源检查。
+- [ ] 更新 `README.md` 精确说明 Node 版状态。
+- [ ] 更新 `CHANGELOG.md`。
+- [ ] 确认版本号一致（`version:check`）。
+- [ ] `npm run build` 生产构建。
+- [ ] `npm run test:mcp` 满分通过。
 
 ## P3：测试与发布准备
-
-- [ ] 迁移 Python 版核心单元测试。
-  - 优先迁移 `test_article_tools_format_param.py`、`test_article_tools_pmcid_normalization.py`、`test_reference_tools_async.py`、`test_relation_tools_async.py`、`test_quality_tools_sorting.py`、`test_search_tools_improvements.py`。
-  - 验收标准：Node 版至少覆盖五个工具的正常路径、参数容错、空结果和上游错误。
-
-- [ ] 增加服务层 mock 测试。
-  - 使用 `nock`、`msw` 或 axios mock，避免测试依赖真实外网。
-  - 验收标准：Europe PMC、PubMed、arXiv、CrossRef、OpenAlex、EasyScholar 均有解析和错误处理测试。
-
-- [ ] 增加真实 API 冒烟测试。
-  - 与单元测试分离，默认不在 CI 必跑，可用环境变量开启。
-  - 验收标准：能验证至少一个公开 PMCID、一个 DOI、一个关键词搜索和一个 OpenAlex 期刊指标。
-
-- [ ] 扩展 MCP 合规脚本。
-  - 当前只检查工具清单、annotations 和 schema。
-  - 需要增加资源检查、代表性工具调用、错误调用、stdout 污染检测。
-  - 验收标准：`npm run test:mcp` 能发现工具运行期结构错误，而不只是注册错误。
-
-- [ ] 更新 README 与迁移计划状态。
-  - README 当前仍写着“迁移版首页草稿”和“服务层与测试后续补齐”，这与部分服务已迁移但行为未等价的状态不够精确。
-  - `MIGRATION_PLAN.md` 应改成带状态的迁移看板，或链接本 TODO。
-  - 验收标准：用户能从 README 清楚知道当前 Node 版可用范围和未完成限制。
-
-## 建议执行顺序
-
-1. 先修五个工具处理器的行为等价，优先级为 `get_article_details`、`get_references`、`search_literature`、`get_literature_relations`、`get_journal_quality`。
-2. 同步迁移对应 Python 测试，确保每补一个行为就有测试锁住。
-3. 再补 MCP resources、缓存统计和配置能力。
-4. 最后移除 `@ts-nocheck`、统一类型模型、更新 README 并准备 npm 发布。

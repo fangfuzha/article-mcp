@@ -183,6 +183,90 @@ export function createErrorBoundaryMiddleware(): ToolMiddleware {
 }
 
 /**
+ * Creates middleware that injects processing_time and timestamp into tool responses.
+ *
+ * Python 版 TimingMiddleware 自动为每个 dict 结果注入计时信息。
+ * Node 版在 CallToolResult 的 content[0].text JSON 中注入相同字段。
+ *
+ * @returns Tool middleware for timing injection.
+ */
+export function createTimingMiddleware(): ToolMiddleware {
+  return async (context, next) => {
+    const startTime = Date.now();
+    const result = await next(context);
+
+    const processingTime = Date.now() - startTime;
+    const timestamp = Math.floor(Date.now() / 1000);
+
+    const updatedResult = injectTimingIntoResult(result, processingTime, timestamp);
+
+    return updatedResult;
+  };
+}
+
+/**
+ * Injects processing_time and timestamp into the first text content of a CallToolResult.
+ *
+ * @param result Original CallToolResult from the handler.
+ * @param processingTime Processing time in milliseconds.
+ * @param timestamp Unix timestamp in seconds.
+ * @returns Updated CallToolResult with timing injected.
+ */
+function injectTimingIntoResult(
+  result: CallToolResult,
+  processingTime: number,
+  timestamp: number,
+): CallToolResult {
+  const content = result.content.map((item) => {
+    if (item.type === "text") {
+      try {
+        const parsed = JSON.parse(item.text);
+        if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+          parsed.processing_time = processingTime;
+          parsed.timestamp = timestamp;
+          return { ...item, text: JSON.stringify(parsed) };
+        }
+      } catch {
+        // 非 JSON 内容不注入计时
+      }
+    }
+    return item;
+  });
+
+  return { ...result, content };
+}
+
+/**
+ * Creates middleware that logs tool requests and responses to stderr.
+ *
+ * Python 版 LoggingMiddleware 记录请求方法、耗时和状态。
+ * Node 版使用 console.error 写入 stderr 以避免污染 MCP stdio 协议通道。
+ *
+ * @returns Tool middleware for request logging.
+ */
+export function createLoggingMiddleware(): ToolMiddleware {
+  return async (context, next) => {
+    const startTime = Date.now();
+
+    try {
+      const result = await next(context);
+      const elapsed = Date.now() - startTime;
+
+      console.error(`[MCP] ${context.toolName} 处理成功, 耗时 ${elapsed}ms`);
+
+      return result;
+    } catch (error) {
+      const elapsed = Date.now() - startTime;
+      console.error(
+        `[MCP] ${context.toolName} 处理失败, 耗时 ${elapsed}ms, 错误: ${formatToolError(error)}`,
+      );
+
+      throw error;
+    }
+  };
+}
+
+/**
  * Formats unknown exceptions into readable tool error text.
  *
  * @param error Error thrown by a tool or parser.
