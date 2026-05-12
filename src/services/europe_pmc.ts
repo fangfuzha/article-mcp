@@ -31,6 +31,7 @@ interface ArticleDetailsResult {
 export class EuropePMCService {
   private baseUrl = "https://www.ebi.ac.uk/europepmc/webservices/rest/search";
   private detailUrl = "https://www.ebi.ac.uk/europepmc/webservices/rest/search";
+  private referenceRootUrl = "https://www.ebi.ac.uk/europepmc/webservices/rest";
   private rateLimitDelay = 1000; // 1 second
   private headers = {
     "User-Agent": "Europe-PMC-MCP-Server/1.0",
@@ -123,6 +124,241 @@ export class EuropePMCService {
       this.logger.error(`Error processing article JSON: ${e}`);
       return null;
     }
+  }
+
+  /**
+   * 推断 Europe PMC references 接口可用的标识符类型。
+   *
+   * @param identifier 用户传入的 DOI、PMID 或 PMCID。
+   * @returns 归一化后的标识符类型。
+   */
+  private inferReferenceIdentifierType(identifier: string): "doi" | "pmid" | "pmcid" {
+    const normalized = identifier.trim();
+    const upper = normalized.toUpperCase();
+
+    if (upper.startsWith("PMCID:") || upper.startsWith("PMC")) {
+      return "pmcid";
+    }
+
+    if (upper.startsWith("PMID:") || /^\d+$/.test(normalized)) {
+      return "pmid";
+    }
+
+    return "doi";
+  }
+
+  /**
+   * 去除常见标识符前缀。
+   *
+   * @param identifier 用户传入的标识符。
+   * @returns 去除 DOI、PMID、PMCID 前缀后的标识符。
+   */
+  private stripIdentifierPrefix(identifier: string): string {
+    return identifier
+      .replace(/^DOI:/i, "")
+      .replace(/^PMID:/i, "")
+      .replace(/^PMCID:/i, "")
+      .trim();
+  }
+
+  /**
+   * 标准化 PMCID，确保传给 Europe PMC references 接口时带 PMC 前缀。
+   *
+   * @param identifier 用户传入的 PMCID。
+   * @returns 带 PMC 前缀的 PMCID。
+   */
+  private normalizeReferencePmcid(identifier: string): string {
+    const normalized = this.stripIdentifierPrefix(identifier);
+    return normalized.toUpperCase().startsWith("PMC") ? normalized : `PMC${normalized}`;
+  }
+
+  /**
+   * 从 Europe PMC references 记录中提取作者列表。
+   *
+   * @param referenceJson Europe PMC references 原始记录。
+   * @returns 作者姓名列表。
+   */
+  private extractReferenceAuthors(referenceJson: any): string[] {
+    const authorList = referenceJson.authorList?.author;
+    if (Array.isArray(authorList)) {
+      return authorList
+        .map((author: any) => {
+          if (typeof author === "string") {
+            return author.trim();
+          }
+
+          const firstName = String(author.firstName || "").trim();
+          const lastName = String(author.lastName || "").trim();
+          return firstName && lastName ? `${firstName} ${lastName}` : lastName || firstName;
+        })
+        .filter(Boolean);
+    }
+
+    const authorString = String(referenceJson.authorString || referenceJson.authors || "").trim();
+    return authorString
+      ? authorString
+          .split(/[;,]/)
+          .map((author) => author.trim())
+          .filter(Boolean)
+      : [];
+  }
+
+  /**
+   * 格式化 Europe PMC references 接口返回的参考文献记录。
+   *
+   * @param referenceJson Europe PMC references 原始记录。
+   * @returns 工具层统一使用的参考文献记录。
+   */
+  private formatReferenceRecord(referenceJson: any): Record<string, any> {
+    const referenceSource = String(referenceJson.source || "").toUpperCase();
+    const referenceId = String(referenceJson.id || "").trim();
+    const publicationYear = referenceJson.pubYear || referenceJson.year || "";
+
+    return {
+      title:
+        referenceJson.title ||
+        referenceJson.articleTitle ||
+        referenceJson.citationTitle ||
+        referenceJson.unstructured ||
+        "",
+      authors: this.extractReferenceAuthors(referenceJson),
+      journal:
+        referenceJson.journalTitle ||
+        referenceJson.journalAbbreviation ||
+        referenceJson.journal ||
+        "",
+      year: publicationYear,
+      publication_date:
+        referenceJson.firstPublicationDate || (publicationYear ? `${publicationYear}-01-01` : ""),
+      doi: referenceJson.doi || referenceJson.DOI || "",
+      pmid: referenceJson.pmid || (referenceSource === "MED" ? referenceId : ""),
+      pmcid:
+        referenceJson.pmcid ||
+        referenceJson.pmc_id ||
+        (referenceSource === "PMC" && referenceId ? this.normalizeReferencePmcid(referenceId) : ""),
+      abstract: referenceJson.abstractText || referenceJson.abstract || "",
+      volume: referenceJson.volume || "",
+      issue: referenceJson.issue || "",
+      pages: referenceJson.pageInfo || referenceJson.page || referenceJson.firstPage || "",
+      source: "europe_pmc",
+    };
+  }
+
+  /**
+   * 将 DOI、PMID 或 PMCID 解析为 Europe PMC references endpoint 需要的 source/id。
+   *
+   * @param identifier 用户传入的文献标识符。
+   * @param idType 用户指定或推断出的标识符类型。
+   * @returns Europe PMC references endpoint 的 source/id，无法解析时返回 null。
+   */
+  private async resolveReferenceTarget(
+    identifier: string,
+    idType: string,
+  ): Promise<{ source: string; id: string } | null> {
+    const normalizedType =
+      idType === "auto" ? this.inferReferenceIdentifierType(identifier) : idType.toLowerCase();
+    const normalizedIdentifier = this.stripIdentifierPrefix(identifier);
+
+    if (normalizedType === "pmid") {
+      return { source: "MED", id: normalizedIdentifier };
+    }
+
+    if (normalizedType === "pmcid") {
+      return { source: "PMC", id: this.normalizeReferencePmcid(normalizedIdentifier) };
+    }
+
+    const params = {
+      query: `DOI:"${normalizedIdentifier}"`,
+      format: "json",
+      resultType: "core",
+      pageSize: 1,
+    };
+    const data = await defaultApiClient.get<any>(this.baseUrl, params, this.headers, 60000);
+    const article = data?.resultList?.result?.[0];
+
+    if (!article) {
+      return null;
+    }
+
+    const source = String(article.source || (article.pmid ? "MED" : article.pmcid ? "PMC" : ""));
+    const targetId = String(article.id || article.pmid || article.pmcid || "").trim();
+
+    if (!source || !targetId) {
+      return null;
+    }
+
+    return {
+      source: source.toUpperCase(),
+      id: source.toUpperCase() === "PMC" ? this.normalizeReferencePmcid(targetId) : targetId,
+    };
+  }
+
+  /**
+   * 通过 Europe PMC references endpoint 获取参考文献。
+   *
+   * @param identifier DOI、PMID 或 PMCID。
+   * @param idType 标识符类型，auto 时根据标识符格式推断。
+   * @param maxResults 最大返回参考文献数量。
+   * @returns 参考文献查询结果和解析后的 Europe PMC source/id。
+   */
+  async getReferencesAsync(
+    identifier: string,
+    idType: string = "auto",
+    maxResults: number = 20,
+  ): Promise<Record<string, any>> {
+    const cacheKey = `europe_pmc_references_${idType}_${identifier}_${maxResults}`;
+
+    return this.cacheManager.getCachedOrFetch(
+      cacheKey,
+      async () => {
+        try {
+          const target = await this.resolveReferenceTarget(identifier, idType);
+          if (!target) {
+            return {
+              success: false,
+              references: [],
+              total_count: 0,
+              source: "europe_pmc",
+              error: `无法解析 Europe PMC references 标识符: ${identifier}`,
+            };
+          }
+
+          const url = `${this.referenceRootUrl}/${target.source}/${encodeURIComponent(target.id)}/references`;
+          const params = {
+            format: "json",
+            pageSize: maxResults,
+          };
+
+          const data = await defaultApiClient.get<any>(url, params, this.headers, 60000);
+          const rawReferences = data?.referenceList?.reference || [];
+          const references = rawReferences
+            .slice(0, maxResults)
+            .map((referenceJson: any) => this.formatReferenceRecord(referenceJson));
+
+          return {
+            success: true,
+            references,
+            total_count: Number(data?.hitCount ?? references.length),
+            source: "europe_pmc",
+            resolved_target: target,
+            message: references.length
+              ? `Europe PMC 返回 ${references.length} 条参考文献`
+              : "Europe PMC 未返回参考文献",
+          };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          this.logger.error(`Europe PMC 获取参考文献失败: ${errorMessage}`);
+          return {
+            success: false,
+            references: [],
+            total_count: 0,
+            source: "europe_pmc",
+            error: errorMessage,
+          };
+        }
+      },
+      24,
+    );
   }
 
   /**

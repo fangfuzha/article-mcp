@@ -37,6 +37,21 @@ function createMockServices(): ArticleMcpServices {
           pmcid,
         },
       }),
+      getReferencesAsync: async () => ({
+        references: [
+          {
+            title: "Reference A",
+            doi: "10.1000/ref-a",
+            authors: ["Europe Author"],
+            journal: "Europe PMC Journal",
+            abstract: "Europe PMC reference metadata",
+            pmid: "12345",
+            pmcid: "PMC12345",
+          },
+        ],
+        total_count: 1,
+        source: "europe_pmc",
+      }),
       searchBatchDoiAsync: async () => [
         {
           title: "Reference A",
@@ -353,6 +368,11 @@ describe("tool handlers", () => {
     const services = createMockServices();
     let requestedDois: string[] = [];
 
+    services.europePmc.getReferencesAsync = async () => ({
+      references: [],
+      total_count: 0,
+      source: "europe_pmc",
+    });
     services.crossref.getReferencesAsync = async () => ({
       references: [
         { title: "CrossRef A", doi: "10.1000/ref-a", authors: ["Alice"] },
@@ -394,6 +414,71 @@ describe("tool handlers", () => {
     });
     expect(result.references_by_source.crossref).toHaveLength(2);
     expect(result.references_by_source.europe_pmc).toHaveLength(2);
+  });
+
+  it("uses the Europe PMC references endpoint when selected as the only reference source", async () => {
+    const services = createMockServices();
+    const calls: any[] = [];
+
+    services.europePmc.getReferencesAsync = async (...args: any[]) => {
+      calls.push(args);
+      return {
+        references: [
+          {
+            title: "Europe Direct Ref",
+            doi: "10.1000/europe-direct",
+            authors: ["Direct Author"],
+            journal: "Direct Journal",
+            abstract: "Direct abstract",
+          },
+        ],
+        total_count: 1,
+        source: "europe_pmc",
+      };
+    };
+
+    const handlers = createToolHandlers(services);
+    const result = parseTextResult(
+      await handlers.get_references!({
+        identifier: "PMID:12345",
+        id_type: "auto",
+        sources: ["europe_pmc"],
+      }),
+    );
+
+    expect(calls[0]).toEqual(["12345", "pmid", 20]);
+    expect(result.sources_used).toEqual(["europe_pmc"]);
+    expect(result.merged_references).toHaveLength(1);
+    expect(result.merged_references[0]).toMatchObject({
+      source: "europe_pmc",
+      doi: "10.1000/europe-direct",
+      abstract: "Direct abstract",
+    });
+  });
+
+  it("resolves DOI input before calling Europe PMC references", async () => {
+    const services = createMockServices();
+    const calls: any[] = [];
+
+    services.pubmed.findPmidByDoiAsync = async () => "67890";
+    services.europePmc.getReferencesAsync = async (...args: any[]) => {
+      calls.push(args);
+      return {
+        references: [],
+        total_count: 0,
+        source: "europe_pmc",
+      };
+    };
+
+    const handlers = createToolHandlers(services);
+    await handlers.get_references!({
+      identifier: "10.1000/source",
+      id_type: "doi",
+      sources: ["europe_pmc"],
+      max_results: 5,
+    });
+
+    expect(calls[0]).toEqual(["67890", "pmid", 5]);
   });
 
   it("respects selected literature relation types", async () => {
