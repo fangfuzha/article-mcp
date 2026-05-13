@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { TOOL_DEFINITIONS } from "../src/tools/definitions.js";
+import {
+  createToolDefinitions,
+  resolveToolDescriptionLanguage,
+  TOOL_DEFINITIONS,
+} from "../src/tools/definitions.js";
 
 const expectedToolNames = [
   "search_literature",
@@ -53,5 +57,33 @@ describe("tool definitions", () => {
     }
 
     expect(missing).toEqual([]);
+  });
+
+  it("uses Chinese tool explanations by default", () => {
+    const tools = createToolDefinitions({});
+    const searchTool = tools.find((tool) => tool.name === "search_literature");
+
+    expect(resolveToolDescriptionLanguage({})).toBe("zh-CN");
+    expect(searchTool?.annotations?.title).toBe("文献搜索");
+    expect(searchTool?.description).toContain("多源文献搜索工具");
+    expect(searchTool?.inputSchema.properties.keyword).toMatchObject({
+      description: "搜索关键词（必填）",
+    });
+  });
+
+  it("uses English tool explanations when ARTICLE_MCP_LANG is en", () => {
+    const tools = createToolDefinitions({ ARTICLE_MCP_LANG: "en" });
+    const searchTool = tools.find((tool) => tool.name === "search_literature");
+
+    expect(resolveToolDescriptionLanguage({ ARTICLE_MCP_LANG: "en" })).toBe("en");
+    expect(searchTool?.annotations?.title).toBe("Literature Search");
+    expect(searchTool?.description).toContain("Search academic literature across multiple sources");
+    expect(searchTool?.inputSchema.properties.keyword).toMatchObject({
+      description: "Search keyword (required)",
+    });
+  });
+
+  it("falls back to Chinese for unsupported tool explanation languages", () => {
+    expect(resolveToolDescriptionLanguage({ ARTICLE_MCP_LANG: "fr" })).toBe("zh-CN");
   });
 });

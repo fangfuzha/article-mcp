@@ -9,7 +9,7 @@ import {
 } from "../middleware/index.js";
 import { createArticleMcpServices } from "../services/container.js";
 import { JournalQualityCache } from "../services/journal_quality_cache.js";
-import { TOOL_DEFINITIONS, type ArticleMcpToolName } from "./definitions.js";
+import { createToolDefinitions, type ArticleMcpToolName } from "./definitions.js";
 import { createToolHandlers } from "./handlers.js";
 import {
   GetArticleDetailsArgumentsSchema,
@@ -43,7 +43,7 @@ export function registerArticleMcpTools(server: McpServer): void {
     createTimingMiddleware(),
   ]);
 
-  for (const tool of TOOL_DEFINITIONS) {
+  for (const tool of createToolDefinitions()) {
     const toolName = tool.name as ArticleMcpToolName;
 
     server.registerTool(
