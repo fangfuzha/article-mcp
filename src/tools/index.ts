@@ -8,6 +8,7 @@ import {
   ToolExecutionPipeline,
 } from "../middleware/index.js";
 import { createArticleMcpServices } from "../services/container.js";
+import { JournalQualityCache } from "../services/journal_quality_cache.js";
 import { TOOL_DEFINITIONS, type ArticleMcpToolName } from "./definitions.js";
 import { createToolHandlers } from "./handlers.js";
 import {
@@ -34,7 +35,8 @@ const TOOL_RUNTIME_SCHEMAS = {
 export function registerArticleMcpTools(server: McpServer): void {
   const services = createArticleMcpServices();
   const searchCache = new SearchCache();
-  const handlers = createToolHandlers(services, searchCache);
+  const journalQualityCache = new JournalQualityCache();
+  const handlers = createToolHandlers(services, searchCache, journalQualityCache);
   const pipeline = new ToolExecutionPipeline([
     createErrorBoundaryMiddleware(),
     createLoggingMiddleware(),

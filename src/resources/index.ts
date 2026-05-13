@@ -1,10 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { readdir, readFile, stat } from "fs/promises";
+import { readdir, stat } from "fs/promises";
 import { homedir } from "os";
 import { join } from "path";
 
 import { SERVER_NAME, SERVER_VERSION } from "../index.js";
+import { JournalQualityCache } from "../services/journal_quality_cache.js";
 
 const CACHE_DIR = join(homedir(), ".article_mcp_cache");
 
@@ -16,6 +17,8 @@ const CACHE_DIR = join(homedir(), ".article_mcp_cache");
  * @param server MCP server 实例。
  */
 export function registerArticleMcpResources(server: McpServer): void {
+  const journalQualityCache = new JournalQualityCache();
+
   // config://version —— 服务器版本
   server.registerResource(
     "config-version",
@@ -120,20 +123,8 @@ export function registerArticleMcpResources(server: McpServer): void {
     async (_uri, { journalName }) => {
       const journalNameStr = String(journalName);
       try {
-        const cacheFilePath = join(
-          CACHE_DIR,
-          `journal_${journalNameStr.replace(/\s+/g, "_").toLowerCase()}.json`,
-        );
-
-        let cacheContent: string | null = null;
-        try {
-          cacheContent = await readFile(cacheFilePath, { encoding: "utf-8" });
-        } catch {
-          // 缓存不存在
-        }
-
-        if (cacheContent) {
-          const cachedData = JSON.parse(cacheContent);
+        const cachedData = await journalQualityCache.getMergedResult(journalNameStr);
+        if (cachedData) {
           return {
             contents: [
               {
@@ -143,7 +134,7 @@ export function registerArticleMcpResources(server: McpServer): void {
                     journal_name: journalNameStr,
                     quality_metrics: cachedData.quality_metrics ?? {},
                     ranking_info: cachedData.ranking_info ?? {},
-                    data_source: "cache",
+                    data_source: cachedData.data_source ?? "cache",
                     last_updated: cachedData.timestamp ?? null,
                     resource_type: "journal_quality",
                   },

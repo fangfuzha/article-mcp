@@ -59,6 +59,33 @@ const SAMPLE_PMC_XML_WITH_SECTIONS = `<?xml version="1.0" encoding="UTF-8"?>
   </article>
 </pmc-articleset>`;
 
+const SAMPLE_COMPLEX_PMC_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<pmc-articleset>
+  <article>
+    <body>
+      <sec sec-type="results">
+        <title>Results</title>
+        <p>Water was measured as H<sub>2</sub>O and energy as x<sup>2</sup>.</p>
+        <list>
+          <list-item><p>First finding</p></list-item>
+          <list-item><p>Second finding</p></list-item>
+        </list>
+        <table-wrap>
+          <caption><p>Performance Table</p></caption>
+          <table>
+            <thead>
+              <tr><th>Metric</th><th>Value</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Accuracy</td><td>95%</td></tr>
+            </tbody>
+          </table>
+        </table-wrap>
+      </sec>
+    </body>
+  </article>
+</pmc-articleset>`;
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -163,5 +190,20 @@ describe("PubMed fulltext conversion", () => {
     expect(result.sections_requested).toEqual([]);
     expect(result.sections_found).toEqual([]);
     expect(result.sections_missing).toEqual([]);
+  });
+
+  it("preserves complex structures such as lists, tables, and sub or sup text in markdown", async () => {
+    mockPmcXml(SAMPLE_COMPLEX_PMC_XML);
+    const pubmed = createPubMedService();
+
+    const result = await pubmed.getPMCFulltextHtmlAsync("PMC9999999");
+
+    expect(result.fulltext_markdown).toContain("## Results");
+    expect(result.fulltext_markdown).toContain("H2O");
+    expect(result.fulltext_markdown).toContain("x^2^");
+    expect(result.fulltext_markdown).toContain("- First finding");
+    expect(result.fulltext_markdown).toContain("- Second finding");
+    expect(result.fulltext_markdown).toContain("| Metric | Value |");
+    expect(result.fulltext_markdown).toContain("| Accuracy | 95% |");
   });
 });

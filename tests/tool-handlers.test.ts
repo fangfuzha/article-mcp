@@ -686,6 +686,106 @@ describe("tool handlers", () => {
     );
   });
 
+  it("expands citing and similar relation branches when max_depth is greater than one", async () => {
+    const services = createMockServices();
+
+    services.openalex.getCitationsAsync = async (doi: string) => {
+      if (doi === "10.1000/source") {
+        return {
+          success: true,
+          citations: [{ title: "Citing Level 1", doi: "10.1000/citing-1" }],
+          total_count: 1,
+          source: "openalex",
+        };
+      }
+
+      if (doi === "10.1000/citing-1") {
+        return {
+          success: true,
+          citations: [{ title: "Citing Level 2", doi: "10.1000/citing-2" }],
+          total_count: 1,
+          source: "openalex",
+        };
+      }
+
+      return { success: true, citations: [], total_count: 0, source: "openalex" };
+    };
+
+    services.pubmed.findPmidByDoiAsync = async (doi: string) => {
+      if (doi === "10.1000/source") {
+        return "12345";
+      }
+      if (doi === "10.1000/similar-1") {
+        return "20001";
+      }
+      return "12345";
+    };
+
+    services.pubmed.getSimilarArticlesAsync = async (pmid: string) => {
+      if (pmid === "12345") {
+        return {
+          similar_articles: [
+            {
+              pmid: "20001",
+              title: "Similar Level 1",
+              doi: "10.1000/similar-1",
+              authors: ["Author A"],
+              journal_name: "Similar Journal",
+              publication_date: "2026-01-01",
+              abstract: "Level 1 similar article",
+            },
+          ],
+        };
+      }
+
+      if (pmid === "20001") {
+        return {
+          similar_articles: [
+            {
+              pmid: "20002",
+              title: "Similar Level 2",
+              doi: "10.1000/similar-2",
+              authors: ["Author B"],
+              journal_name: "Similar Journal",
+              publication_date: "2026-01-02",
+              abstract: "Level 2 similar article",
+            },
+          ],
+        };
+      }
+
+      return { similar_articles: [] };
+    };
+
+    const handlers = createToolHandlers(services);
+    const result = parseTextResult(
+      await handlers.get_literature_relations!({
+        identifiers: "10.1000/source",
+        relation_types: ["citing", "similar"],
+        analysis_type: "network",
+        max_depth: 2,
+        sources: ["openalex", "pubmed"],
+      }),
+    );
+
+    expect(result.network_data.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "10.1000/citing-1" }),
+        expect.objectContaining({ id: "10.1000/citing-2" }),
+        expect.objectContaining({ id: "10.1000/similar-1" }),
+        expect.objectContaining({ id: "10.1000/similar-2" }),
+      ]),
+    );
+    expect(result.network_data.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: "10.1000/source", target: "10.1000/citing-1" }),
+        expect.objectContaining({ source: "10.1000/citing-1", target: "10.1000/citing-2" }),
+        expect.objectContaining({ source: "10.1000/source", target: "10.1000/similar-1" }),
+        expect.objectContaining({ source: "10.1000/similar-1", target: "10.1000/similar-2" }),
+      ]),
+    );
+  });
+
   it("filters journal metrics and sorts batch results", async () => {
     const handlers = createToolHandlers(createMockServices());
     const result = parseTextResult(

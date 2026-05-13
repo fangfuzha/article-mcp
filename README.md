@@ -1,7 +1,10 @@
 # Article MCP 文献检索服务器
 
-> 基于 Node.js + TypeScript 的 Article MCP 迁移版首页草稿。
-> 当前仓库正在从 Python 版本迁移到 Node.js 版本，核心 MCP 入口、工具注册与参数校验已经搭建完成，服务层与测试会在后续版本继续补齐。
+> 基于 Node.js + TypeScript 的 Article MCP 迁移版本。
+>
+> **🙏 原始项目致敬**
+>
+> 本项目是对 [gqy20/article-mcp](https://github.com/gqy20/article-mcp) Python 版本的迁移实现。原项目采用 FastMCP 框架构建，感谢原作者的优秀设计与开源贡献。本版本保留了核心架构设计理念，将其适配至 Node.js + TypeScript 生态。
 
 Article MCP 通过 MCP 协议为 Claude Desktop、Cherry Studio 和其他兼容客户端提供多源文献检索能力，聚合 Europe PMC、PubMed、arXiv、CrossRef、OpenAlex 与 EasyScholar 等数据源。
 

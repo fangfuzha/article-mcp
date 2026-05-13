@@ -37,16 +37,16 @@
     "europe-pmc",
     "arxiv"
   ],
-  "author": "gqy20",
+  "author": "fangfuzha",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gqy20/article-mcp.git"
+    "url": "git+https://github.com/fangfuzha/article-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/gqy20/article-mcp/issues"
+    "url": "https://github.com/fangfuzha/article-mcp/issues"
   },
-  "homepage": "https://github.com/gqy20/article-mcp#readme",
+  "homepage": "https://github.com/fangfuzha/article-mcp#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.1.2",
     "axios": "^1.7.2",

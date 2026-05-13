@@ -2,6 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { ArticleMcpServices } from "../services/container.js";
 import { SearchCache } from "../middleware/search_cache.js";
+import { JournalQualityCache } from "../services/journal_quality_cache.js";
 import {
   GetArticleDetailsArgumentsSchema,
   GetJournalQualityArgumentsSchema,
@@ -60,8 +61,10 @@ const SEARCH_STRATEGIES: Record<string, SearchStrategy> = {
 export function createToolHandlers(
   services: ArticleMcpServices,
   searchCache?: SearchCache | null,
+  journalQualityCache?: JournalQualityCache | null,
 ): ToolHandlerMap {
   const cache = searchCache ?? undefined;
+  const qualityCache = journalQualityCache ?? undefined;
 
   return {
     search_literature: (toolArguments) => handleSearchLiterature(services, cache, toolArguments),
@@ -69,7 +72,8 @@ export function createToolHandlers(
     get_references: (toolArguments) => handleGetReferences(services, toolArguments),
     get_literature_relations: (toolArguments) =>
       handleGetLiteratureRelations(services, toolArguments),
-    get_journal_quality: (toolArguments) => handleGetJournalQuality(services, toolArguments),
+    get_journal_quality: (toolArguments) =>
+      handleGetJournalQuality(services, qualityCache, toolArguments),
   };
 }
 
@@ -391,6 +395,7 @@ async function handleGetLiteratureRelations(
 
 async function handleGetJournalQuality(
   services: ArticleMcpServices,
+  journalQualityCache: JournalQualityCache | undefined,
   toolArguments: unknown,
 ): Promise<CallToolResult> {
   const args = GetJournalQualityArgumentsSchema.parse(toolArguments);
@@ -403,14 +408,37 @@ async function handleGetJournalQuality(
 
   const journalResults = await Promise.all(
     journalNames.map(async (journalName) => {
-      const easyScholarResult = await services.easyscholar.getJournalQuality(journalName);
-      const openalexMetrics = await services.openalexMetrics.getJournalMetrics(
-        journalName,
-        args.use_cache,
-      );
+      let easyScholarResult: Record<string, unknown> | null = null;
+      let openalexMetrics: Record<string, unknown> | null = null;
+
+      if (journalQualityCache && args.use_cache) {
+        const cached = await journalQualityCache.getMergedResult(journalName);
+        if (cached) {
+          easyScholarResult = cached;
+        }
+      }
+
+      if (!easyScholarResult) {
+        easyScholarResult = (await services.easyscholar.getJournalQuality(
+          journalName,
+        )) as unknown as Record<string, unknown>;
+        openalexMetrics = await services.openalexMetrics.getJournalMetrics(
+          journalName,
+          args.use_cache,
+        );
+
+        if (journalQualityCache && args.use_cache && easyScholarResult.success === true) {
+          await journalQualityCache.set(journalName, easyScholarResult, openalexMetrics);
+        }
+      }
+
+      const resolvedEasyScholarResult = easyScholarResult ?? {};
+
       const qualityMetrics = filterMetrics(
         {
-          ...easyScholarResult.quality_metrics,
+          ...(isRecord(resolvedEasyScholarResult.quality_metrics)
+            ? resolvedEasyScholarResult.quality_metrics
+            : {}),
           ...(openalexMetrics || {}),
         },
         includeMetrics,
@@ -419,8 +447,8 @@ async function handleGetJournalQuality(
       return {
         journal_name: journalName,
         quality_metrics: qualityMetrics,
-        ranking_info: easyScholarResult.ranking_info,
-        data_source: easyScholarResult.data_source,
+        ranking_info: resolvedEasyScholarResult.ranking_info,
+        data_source: resolvedEasyScholarResult.data_source,
         include_metrics: includeMetrics,
       };
     }),
@@ -850,6 +878,7 @@ async function buildRelationNetworkData(
     sources?.length ? sources : ["europe_pmc", "crossref", "pubmed"]
   ).filter((source) => ["europe_pmc", "crossref", "pubmed"].includes(source));
   const frontier: Array<{
+    relationType: "references" | "citing" | "similar";
     nodeId: string;
     identifier: string;
     idType: "doi" | "pmid" | "pmcid";
@@ -858,7 +887,7 @@ async function buildRelationNetworkData(
   const expanded = new Set<string>();
 
   for (const relation of relations) {
-    for (const relationType of ["references", "citing"] as const) {
+    for (const relationType of ["references", "citing", "similar"] as const) {
       const items = relation[relationType];
       if (!Array.isArray(items)) {
         continue;
@@ -871,6 +900,7 @@ async function buildRelationNetworkData(
         }
 
         frontier.push({
+          relationType,
           nodeId: expansionTarget.nodeId,
           identifier: expansionTarget.identifier,
           idType: expansionTarget.idType,
@@ -886,42 +916,40 @@ async function buildRelationNetworkData(
       continue;
     }
 
-    const expansionKey = `${current.idType}:${current.identifier}`.toLowerCase();
+    const expansionKey = `${current.relationType}:${current.idType}:${current.identifier}`.toLowerCase();
     if (expanded.has(expansionKey)) {
       continue;
     }
     expanded.add(expansionKey);
 
-    const referenceResult = await services.referenceService.getReferencesAsync({
-      identifier: current.identifier,
-      idType: current.idType,
-      sources: referenceSources,
+    const relatedItems = await expandRelationBranch(
+      services,
+      current,
+      referenceSources,
       maxResults,
-      includeMetadata: false,
-    });
-    const references = Array.isArray(referenceResult.merged_references)
-      ? referenceResult.merged_references
-      : [];
+      sources,
+    );
 
-    for (const item of references) {
+    for (const item of relatedItems) {
       const article: Record<string, unknown> = isRecord(item) ? item : { value: item };
-      const targetId = relationNodeId(article) ?? `${current.nodeId}:references:${edges.length}`;
+      const targetId =
+        relationNodeId(article) ?? `${current.nodeId}:${current.relationType}:${edges.length}`;
       const targetTitle = typeof article.title === "string" ? article.title.trim() : "";
       const targetLabel = targetTitle || targetId;
       if (!nodes.has(targetId)) {
         nodes.set(targetId, {
           id: targetId,
-          type: "references",
+          type: current.relationType,
           label: targetLabel,
         });
       }
 
-      const edgeKey = `${current.nodeId}->${targetId}:references`;
+      const edgeKey = `${current.nodeId}->${targetId}:${current.relationType}`;
       if (!edges.some((edge) => `${edge.source}->${edge.target}:${edge.relation}` === edgeKey)) {
         edges.push({
           source: current.nodeId,
           target: targetId,
-          relation: "references",
+          relation: current.relationType,
           depth: current.depth + 1,
         });
       }
@@ -929,6 +957,7 @@ async function buildRelationNetworkData(
       const nextTarget = relationExpansionTarget(article);
       if (nextTarget) {
         frontier.push({
+          relationType: current.relationType,
           nodeId: targetId,
           identifier: nextTarget.identifier,
           idType: nextTarget.idType,
@@ -938,12 +967,113 @@ async function buildRelationNetworkData(
     }
   }
 
+  const finalNodes = Array.from(nodes.values());
+  const clusters = buildClusters(edges);
+  const metrics = calculateNetworkMetrics(finalNodes, edges);
+
   return {
-    nodes: Array.from(nodes.values()),
+    nodes: finalNodes,
     edges,
-    clusters: {},
-    metrics: { centrality: {}, citationStrength: {}, density: 0 },
+    clusters,
+    metrics,
   };
+}
+
+async function expandRelationBranch(
+  services: ArticleMcpServices,
+  current: {
+    relationType: "references" | "citing" | "similar";
+    nodeId: string;
+    identifier: string;
+    idType: "doi" | "pmid" | "pmcid";
+    depth: number;
+  },
+  referenceSources: string[],
+  maxResults: number,
+  sources?: string[],
+): Promise<unknown[]> {
+  if (current.relationType === "references") {
+    const referenceResult = await services.referenceService.getReferencesAsync({
+      identifier: current.identifier,
+      idType: current.idType,
+      sources: referenceSources,
+      maxResults,
+      includeMetadata: false,
+    });
+
+    return Array.isArray(referenceResult.merged_references)
+      ? referenceResult.merged_references
+      : [];
+  }
+
+  if (current.relationType === "citing") {
+    if (sources?.length && !sources.includes("openalex")) {
+      return [];
+    }
+
+    const resolved = await resolveArticleIdentifiers(services, current.identifier, current.idType);
+    const doi = resolved.doi ?? (current.idType === "doi" ? current.identifier : null);
+    if (!doi) {
+      return [];
+    }
+
+    const citations = await services.openalex.getCitationsAsync(doi, maxResults);
+    return Array.isArray(citations.citations) ? citations.citations : [];
+  }
+
+  if (sources?.length && !sources.includes("pubmed")) {
+    return [];
+  }
+
+  const resolved = await resolveArticleIdentifiers(services, current.identifier, current.idType);
+  const pmid =
+    resolved.pmid ??
+    (current.idType === "pmid" ? current.identifier : null) ??
+    (resolved.doi ? await services.pubmed.findPmidByDoiAsync(resolved.doi) : null);
+  if (!pmid) {
+    return [];
+  }
+
+  const similar = await services.pubmed.getSimilarArticlesAsync(pmid, undefined, maxResults);
+  return Array.isArray(similar.similar_articles) ? similar.similar_articles : [];
+}
+
+function calculateNetworkMetrics(
+  nodes: Array<Record<string, unknown>>,
+  edges: Array<Record<string, unknown>>,
+): {
+  centrality: Record<string, number>;
+  citationStrength: Record<string, number>;
+  density: number;
+} {
+  const degreeCount = new Map<string, number>();
+  const citationCount = new Map<string, number>();
+
+  for (const edge of edges) {
+    const source = String(edge.source);
+    const target = String(edge.target);
+    degreeCount.set(source, (degreeCount.get(source) ?? 0) + 1);
+    degreeCount.set(target, (degreeCount.get(target) ?? 0) + 1);
+    citationCount.set(source, (citationCount.get(source) ?? 0) + 1);
+  }
+
+  const totalEdges = edges.length;
+  const totalPossibleEdges = nodes.length * (nodes.length - 1);
+  const density = totalPossibleEdges > 0 ? Number((totalEdges / totalPossibleEdges).toFixed(4)) : 0;
+
+  const maxDegree = Math.max(...degreeCount.values(), 1);
+  const centrality: Record<string, number> = {};
+  for (const [nodeId, degree] of degreeCount) {
+    centrality[nodeId] = Number((degree / maxDegree).toFixed(4));
+  }
+
+  const maxCitations = Math.max(...citationCount.values(), 1);
+  const citationStrength: Record<string, number> = {};
+  for (const [nodeId, count] of citationCount) {
+    citationStrength[nodeId] = Number((count / maxCitations).toFixed(4));
+  }
+
+  return { centrality, citationStrength, density };
 }
 
 function relationExpansionTarget(
@@ -999,20 +1129,58 @@ function sortJournalResults<T extends { quality_metrics: Record<string, unknown>
     return results;
   }
 
-  const direction = sortOrder === "asc" ? 1 : -1;
   return [...results].sort((left, right) => {
-    const leftValue = metricSortValue(left.quality_metrics[sortBy], sortBy);
-    const rightValue = metricSortValue(right.quality_metrics[sortBy], sortBy);
-    return (leftValue - rightValue) * direction;
+    const leftMetric = metricSortValue(left.quality_metrics[sortBy], sortBy);
+    const rightMetric = metricSortValue(right.quality_metrics[sortBy], sortBy);
+
+    if (leftMetric.hasValue !== rightMetric.hasValue) {
+      return leftMetric.hasValue ? -1 : 1;
+    }
+
+    if (leftMetric.value !== rightMetric.value) {
+      return sortOrder === "asc"
+        ? leftMetric.value - rightMetric.value
+        : rightMetric.value - leftMetric.value;
+    }
+
+    const leftName = String((left as Record<string, unknown>).journal_name ?? "");
+    const rightName = String((right as Record<string, unknown>).journal_name ?? "");
+    return leftName.localeCompare(rightName);
   });
 }
 
-function metricSortValue(value: unknown, sortBy: string): number {
+function metricSortValue(
+  value: unknown,
+  sortBy: string,
+): { hasValue: boolean; value: number } {
   if (sortBy === "quartile") {
-    const order: Record<string, number> = { Q1: 4, Q2: 3, Q3: 2, Q4: 1 };
-    return order[String(value).toUpperCase()] ?? 0;
+    const normalized = String(value).trim().toUpperCase();
+    const order: Record<string, number> = {
+      Q1: 4,
+      "1区": 4,
+      "一区": 4,
+      "中科院一区": 4,
+      Q2: 3,
+      "2区": 3,
+      "二区": 3,
+      "中科院二区": 3,
+      Q3: 2,
+      "3区": 2,
+      "三区": 2,
+      "中科院三区": 2,
+      Q4: 1,
+      "4区": 1,
+      "四区": 1,
+      "中科院四区": 1,
+    };
+    const mapped = order[normalized];
+    return { hasValue: mapped !== undefined, value: mapped ?? 0 };
+  }
+
+  if (value === null || value === undefined || value === "") {
+    return { hasValue: false, value: 0 };
   }
 
   const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : 0;
+  return { hasValue: Number.isFinite(numeric), value: Number.isFinite(numeric) ? numeric : 0 };
 }

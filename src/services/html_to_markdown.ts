@@ -12,7 +12,9 @@ export function htmlToMarkdown(htmlContent: string): string | null {
   const normalized = normalizeMarkup(htmlContent);
   const markdown = cleanupMarkdown(
     stripRemainingTags(
-      convertInlineFormatting(convertLists(convertParagraphs(convertTitles(normalized)))),
+      convertInlineFormatting(
+        convertParagraphs(convertLists(convertTables(convertTitles(normalized)))),
+      ),
     ),
   );
 
@@ -83,11 +85,11 @@ function normalizeMarkup(markup: string): string {
 function convertTitles(markup: string): string {
   return markup
     .replace(/<title\b[^>]*>([\s\S]*?)<\/title>/gi, (_match, title: string) => {
-      const text = decodeEntities(stripMarkup(title));
+      const text = renderInlineContent(title);
       return text ? `\n\n## ${text}\n\n` : "\n\n";
     })
     .replace(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi, (_match, level: string, title: string) => {
-      const text = decodeEntities(stripMarkup(title));
+      const text = renderInlineContent(title);
       return text ? `\n\n${"#".repeat(Number(level))} ${text}\n\n` : "\n\n";
     });
 }
@@ -101,9 +103,9 @@ function convertTitles(markup: string): string {
 function convertParagraphs(markup: string): string {
   return markup
     .replace(
-      /<(?:p|caption|td|th)\b[^>]*>([\s\S]*?)<\/(?:p|caption|td|th)>/gi,
+      /<p\b[^>]*>([\s\S]*?)<\/p>/gi,
       (_match, content: string) => {
-        const text = decodeEntities(stripMarkup(content));
+        const text = renderInlineContent(content);
         return text ? `${text}\n\n` : "";
       },
     )
@@ -121,11 +123,46 @@ function convertLists(markup: string): string {
     .replace(
       /<(?:list-item|li)\b[^>]*>([\s\S]*?)<\/(?:list-item|li)>/gi,
       (_match, content: string) => {
-        const text = decodeEntities(stripMarkup(content));
+        const text = renderInlineContent(content);
         return text ? `- ${text}\n` : "";
       },
     )
-    .replace(/<\/?(?:list|ul|ol|table|thead|tbody|tr)[^>]*>/gi, "\n");
+    .replace(/<\/?(?:list|ul|ol)[^>]*>/gi, "\n");
+}
+
+/**
+ * 将表格标签转换为 Markdown 表格。
+ *
+ * @param markup 预处理后的标记字符串。
+ * @returns 替换表格后的字符串。
+ */
+function convertTables(markup: string): string {
+  return markup.replace(/<table\b[^>]*>([\s\S]*?)<\/table>/gi, (_match, tableContent: string) => {
+    const rows = Array.from(tableContent.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi))
+      .map((rowMatch) => {
+        const rowContent = rowMatch[1] ?? "";
+        const cells = Array.from(
+          rowContent.matchAll(/<(?:th|td)\b[^>]*>([\s\S]*?)<\/(?:th|td)>/gi),
+        )
+          .map((cellMatch) => renderInlineContent(cellMatch[1] ?? ""))
+          .filter(Boolean);
+
+        return cells;
+      })
+      .filter((row) => row.length > 0);
+
+    if (!rows.length) {
+      return "\n";
+    }
+
+    const [headerRow = ["Column"], ...bodyRows] = rows;
+    const safeHeader = headerRow.length > 0 ? headerRow : ["Column"];
+    const headerLine = `| ${safeHeader.join(" | ")} |`;
+    const separatorLine = `| ${safeHeader.map(() => "---").join(" | ")} |`;
+    const bodyLines = (bodyRows.length ? bodyRows : []).map((row) => `| ${row.join(" | ")} |`);
+
+    return `\n\n${headerLine}\n${separatorLine}${bodyLines.length ? `\n${bodyLines.join("\n")}` : ""}\n\n`;
+  });
 }
 
 /**
@@ -139,7 +176,14 @@ function convertInlineFormatting(markup: string): string {
     .replace(/<(?:italic|i|em)\b[^>]*>([\s\S]*?)<\/(?:italic|i|em)>/gi, "*$1*")
     .replace(/<(?:bold|b|strong)\b[^>]*>([\s\S]*?)<\/(?:bold|b|strong)>/gi, "**$1**")
     .replace(/<(?:ext-link|xref|a)\b[^>]*>([\s\S]*?)<\/(?:ext-link|xref|a)>/gi, "$1")
-    .replace(/<(?:sub|sup|label|span)\b[^>]*>([\s\S]*?)<\/(?:sub|sup|label|span)>/gi, "$1");
+    .replace(/<sub\b[^>]*>([\s\S]*?)<\/sub>/gi, (_match, content: string) =>
+      decodeEntities(stripMarkup(content)).replace(/\s+/g, "").trim(),
+    )
+    .replace(/<sup\b[^>]*>([\s\S]*?)<\/sup>/gi, (_match, content: string) => {
+      const text = decodeEntities(stripMarkup(content)).replace(/\s+/g, "").trim();
+      return text ? `^${text}^` : "";
+    })
+    .replace(/<(?:label|span)\b[^>]*>([\s\S]*?)<\/(?:label|span)>/gi, "$1");
 }
 
 /**
@@ -150,6 +194,16 @@ function convertInlineFormatting(markup: string): string {
  */
 function stripRemainingTags(markup: string): string {
   return decodeEntities(stripMarkup(markup));
+}
+
+/**
+ * 渲染单个段落或单元格中的内联内容，保留必要的 Markdown 语义。
+ *
+ * @param markup 原始内联标记。
+ * @returns 渲染后的纯文本或 Markdown 片段。
+ */
+function renderInlineContent(markup: string): string {
+  return decodeEntities(stripRemainingTags(convertInlineFormatting(markup))).trim();
 }
 
 /**
@@ -187,7 +241,7 @@ function cleanupText(text: string): string {
  * @returns 去标签后的文本。
  */
 function stripMarkup(markup: string): string {
-  return markup.replace(/<[^>]+>/g, " ");
+  return markup.replace(/<[^>]+>/g, "");
 }
 
 /**
