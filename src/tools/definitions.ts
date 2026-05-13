@@ -44,9 +44,7 @@ const TOOL_TITLES: Record<ToolDescriptionLanguage, Record<ArticleMcpToolName, st
 export function resolveToolDescriptionLanguage(
   env: ToolDescriptionEnvironment = process.env,
 ): ToolDescriptionLanguage {
-  const rawLanguage = (env.ARTICLE_MCP_LANG ?? env.ARTICLE_MCP_LANGUAGE ?? "")
-    .trim()
-    .toLowerCase();
+  const rawLanguage = (env.ARTICLE_MCP_LANG ?? env.ARTICLE_MCP_LANGUAGE ?? "").trim().toLowerCase();
 
   if (["en", "en-us", "en_us", "english"].includes(rawLanguage)) {
     return "en";

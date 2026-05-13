@@ -116,7 +116,7 @@ npm start
 }
 ```
 
-`EASYSCHOLAR_SECRET_KEY` 为可选项，但在期刊质量查询场景下建议配置，以获得更完整的指标结果。
+`EASYSCHOLAR_SECRET_KEY` 为可选项，但在期刊质量查询场景下建议配置，以获得更完整的指标结果。请访问 [EasyScholar](https://www.easyscholar.cc) 注册获取。
 
 ### 工具说明语言
 

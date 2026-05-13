@@ -214,7 +214,8 @@ const EN_INPUT_SCHEMA_DESCRIPTIONS: Record<keyof ToolInputSchemaMap, Record<stri
   },
   get_article_details: {
     pmcid: "PMCID identifier (required): one value or a list, up to 20 PMCIDs in batch mode",
-    sections: "Full-text section selection; null fetches all sections, string/list fetches selected sections",
+    sections:
+      "Full-text section selection; null fetches all sections, string/list fetches selected sections",
     format: "Full-text format (default markdown)",
   },
   get_references: {
