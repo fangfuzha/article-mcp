@@ -8,6 +8,14 @@
 
 Article MCP 通过 MCP 协议为 Claude Desktop、Cherry Studio 和其他兼容客户端提供多源文献检索能力，聚合 Europe PMC、PubMed、arXiv、CrossRef、OpenAlex 与 EasyScholar 等数据源。
 
+## 当前迁移状态
+
+当前 Node 版以 Python `0.2.2` 为行为基线，基础迁移已经完成：stdio MCP 服务、5 个核心工具、5 个 MCP 资源、文件缓存、工程化脚本、CI 工作流和发布配置均已落地。
+
+已完成的对齐范围包括：工具输入 schema、只读工具标注、资源注册、搜索缓存、期刊质量缓存、PMC 全文 Markdown/XML/text 输出、参考文献聚合、文献关系网络扩展，以及与 Python 版一致的主要参数容错行为。
+
+当前发布前门禁以 `npm run test:all` 为准，覆盖 TypeScript 类型检查、ESLint、生产构建、Vitest 测试和 MCP stdio 合规检查。
+
 ## 核心能力
 
 - 多源文献搜索
@@ -44,15 +52,35 @@ npm run dev
 
 ### 命令行方式
 
-如果已经安装依赖，也可以直接通过 CLI 启动：
+如果已经安装依赖，可以直接通过本地 CLI 启动：
 
 ```bash
-npx article-mcp
+npm start
 ```
+
+包发布到 npm 后，也可以通过 `npx article-mcp` 启动。
 
 ## 客户端配置
 
 ### Claude Desktop
+
+本地开发时建议先执行 `npm run build`，然后使用编译后的入口：
+
+```json
+{
+  "mcpServers": {
+    "article-mcp": {
+      "command": "node",
+      "args": ["E:/path/to/article-mcp/dist/index.js"],
+      "env": {
+        "EASYSCHOLAR_SECRET_KEY": "your_key_here"
+      }
+    }
+  }
+}
+```
+
+发布到 npm 后可改用包名启动：
 
 ```json
 {
@@ -97,6 +125,22 @@ npx article-mcp
 | `get_references`           | 获取参考文献 | `identifier`, `id_type`, `sources`, `max_results`, `include_metadata`                                             |
 | `get_literature_relations` | 文献关系分析 | `identifier` / `identifiers`, `id_type`, `relation_types`, `max_results`, `sources`, `analysis_type`, `max_depth` |
 | `get_journal_quality`      | 期刊质量评估 | `journal_name`, `include_metrics`, `use_cache`, `sort_by`, `sort_order`                                           |
+
+## 资源概览
+
+当前版本注册 5 个 MCP 资源：
+
+| 资源 URI                           | 作用                       |
+| ---------------------------------- | -------------------------- |
+| `config://version`                 | 返回服务器版本             |
+| `config://status`                  | 返回服务状态与支持数据源   |
+| `config://tools`                   | 返回工具清单与分类信息     |
+| `stats://cache`                    | 返回缓存目录统计信息       |
+| `journals://{journalName}/quality` | 读取指定期刊的质量缓存结果 |
+
+## 缓存说明
+
+搜索缓存与期刊质量缓存都存放在用户目录下的 `~/.article_mcp_cache/`。搜索缓存使用 SHA256 键和 24 小时 TTL；期刊质量缓存使用共享文件缓存，并带有文件级并发保护，供 `get_journal_quality` 工具和 `journals://{journalName}/quality` 资源共同使用。
 
 ## 数据源说明
 
@@ -229,6 +273,21 @@ npx article-mcp
 工程化文件参考 Python 版补齐了 Node 对应实现：`.github/workflows/node-mcp-compliance.yml` 负责 CI 合规检查，`.github/workflows/publish.yml` 负责 tag 发布到 npm，`scripts/sync-version.ts` 负责版本同步，`scripts/test-mcp-compliance.ts` 负责 stdio MCP 合规检查。
 
 项目使用 `@modelcontextprotocol/sdk`、`zod`、`axios`、`axios-retry`、`fast-xml-parser` 和 `dotenv` 作为基础依赖。
+
+## 项目结构
+
+```text
+src/
+  index.ts              # MCP server 入口
+  middleware/           # 错误边界、日志、计时和搜索缓存
+  resources/            # MCP 资源注册
+  services/             # 外部数据源与聚合服务
+  tools/                # 工具定义、schema、注册和处理器
+  types/                # 共享文献与期刊数据模型
+scripts/                # 版本同步与 MCP 合规检查脚本
+tests/                  # Vitest 回归测试
+reference/              # Python 原项目参考实现
+```
 
 ## 许可证
 

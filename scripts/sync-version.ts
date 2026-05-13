@@ -9,9 +9,9 @@ const indexPath = resolve(projectRoot, "src/index.ts");
 type Command = "check" | "sync";
 
 /**
- * Reads and parses the project package metadata.
+ * 读取并解析项目 package 元数据。
  *
- * @returns Parsed package.json content.
+ * @returns 解析后的 package.json 内容。
  */
 async function readPackageJson(): Promise<{ version: string }> {
   const content = await readFile(packageJsonPath, "utf8");
@@ -19,9 +19,9 @@ async function readPackageJson(): Promise<{ version: string }> {
 }
 
 /**
- * Extracts the server version constant from the TypeScript entrypoint.
+ * 从 TypeScript 入口文件提取服务器版本常量。
  *
- * @returns Server version string or null when not found.
+ * @returns 服务器版本字符串；未找到时返回 null。
  */
 async function readServerVersion(): Promise<string | null> {
   const content = await readFile(indexPath, "utf8");
@@ -30,10 +30,10 @@ async function readServerVersion(): Promise<string | null> {
 }
 
 /**
- * Synchronizes the server version constant from package.json.
+ * 将服务器版本常量同步为 package.json 中的版本。
  *
- * @param version Version from package.json.
- * @returns Whether the entrypoint was modified.
+ * @param version package.json 中的版本。
+ * @returns 入口文件是否被修改。
  */
 async function syncServerVersion(version: string): Promise<boolean> {
   const content = await readFile(indexPath, "utf8");
@@ -51,9 +51,9 @@ async function syncServerVersion(version: string): Promise<boolean> {
 }
 
 /**
- * Checks whether package.json and runtime server metadata use the same version.
+ * 检查 package.json 与运行时服务器元数据是否使用同一版本。
  *
- * @returns True when all checked versions match.
+ * @returns 所有被检查版本一致时返回 true。
  */
 async function checkVersion(): Promise<boolean> {
   const packageJson = await readPackageJson();
@@ -66,10 +66,10 @@ async function checkVersion(): Promise<boolean> {
 }
 
 /**
- * Runs the requested version command.
+ * 执行指定的版本命令。
  *
- * @param command Version command to run.
- * @returns Exit code for the command.
+ * @param command 要执行的版本命令。
+ * @returns 命令退出码。
  */
 async function run(command: Command): Promise<number> {
   if (command === "check") {

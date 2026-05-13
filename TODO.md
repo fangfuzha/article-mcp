@@ -122,8 +122,8 @@ Python 到 Node 的**基础迁移已经完成**。当前 Node 版已经具备可
 
 - [x] 逐个移除 `@ts-nocheck`，补齐缺失类型、修复 NodeNext `.js` 导入、消除隐式 `any`。
 - [x] `EuropePMCService.getArticleDetailsSync()` 已删除，`fetch()` 统一走异步实现。
-- [ ] 注释统一为中文（除专有名词外）。
-- [ ] 抽出共享数据模型 `src/types/`，统一字段名。
+- [x] 注释统一为中文（除专有名词外）。
+- [x] 抽出共享数据模型 `src/types/`，统一字段名。
 
 ---
 
@@ -131,8 +131,8 @@ Python 到 Node 的**基础迁移已经完成**。当前 Node 版已经具备可
 
 - [x] 更新 `src/index.ts` 中注册 resources。
 - [x] `npm run test:mcp` 覆盖资源检查。
-- [ ] 更新 `README.md` 精确说明 Node 版状态。
-- [ ] 更新 `CHANGELOG.md`。
+- [x] 更新 `README.md` 精确说明 Node 版状态。
+- [x] 更新 `CHANGELOG.md`。
 - [x] 确认版本号一致（`version:check`）。
 - [x] `npm run build` 生产构建。
 - [x] `npm run test:mcp` 满分通过。

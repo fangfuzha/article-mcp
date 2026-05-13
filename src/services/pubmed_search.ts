@@ -2,62 +2,16 @@ import { XMLParser } from "fast-xml-parser";
 
 import { convertPmcXmlToMarkdown, htmlToText } from "./html_to_markdown.js";
 import { CacheManager, RateLimiter } from "../middleware/index.js";
+import type {
+  ArticleInfo,
+  ArticleSearchResult,
+  CitingArticlesResult,
+  FulltextResult,
+  SimilarArticlesResult,
+} from "../types/articles.js";
 import { defaultApiClient } from "../utils/api_utils.js";
 
-type ArticleInfo = {
-  pmid: string | null;
-  pmid_link?: string;
-  title: string;
-  authors: string[];
-  journal_name: string;
-  publication_date: string;
-  abstract: string;
-  doi?: string;
-  doi_link?: string;
-  pmc_id?: string;
-  pmc_link?: string;
-  arxiv_id?: string;
-  arxiv_link?: string;
-  semantic_scholar_id?: string;
-  semantic_scholar_link?: string;
-};
-
-type SearchResult = {
-  articles: ArticleInfo[];
-  error?: string;
-  message?: string;
-  processing_time?: number;
-  cache_hit?: boolean;
-};
-
-type CitingArticlesResult = {
-  citing_articles: ArticleInfo[];
-  total_count?: number;
-  error?: string;
-  message?: string;
-  processing_time?: number;
-};
-
-type SimilarArticlesResult = {
-  original_article?: ArticleInfo | null;
-  similar_articles: ArticleInfo[];
-  total_similar_count?: number;
-  retrieved_count?: number;
-  error?: string;
-  message?: string;
-};
-
-type FulltextResult = {
-  pmc_id: string | null;
-  fulltext_xml?: string;
-  fulltext_markdown?: string;
-  fulltext_text?: string;
-  fulltext_available: boolean;
-  sections_requested?: string[];
-  sections_found?: string[];
-  sections_missing?: string[];
-  error?: string;
-};
+type SearchResult = ArticleSearchResult;
 
 const MONTH_MAP: Record<string, string> = {
   Jan: "01",

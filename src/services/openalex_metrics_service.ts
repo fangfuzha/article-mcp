@@ -1,14 +1,6 @@
 import { CacheManager } from "../middleware/index.js";
+import type { OpenAlexJournalMetrics } from "../types/journals.js";
 import { defaultApiClient } from "../utils/api_utils.js";
-
-export type OpenAlexJournalMetrics = {
-  h_index?: number;
-  citation_rate?: number;
-  cited_by_count?: number;
-  works_count?: number;
-  i10_index?: number;
-  source: "openalex";
-};
 
 /**
  * OpenAlex 期刊指标补充服务。
@@ -84,9 +76,9 @@ export class OpenAlexMetricsService {
 }
 
 /**
- * Creates a default OpenAlex metrics service instance.
+ * 创建默认 OpenAlex 指标服务实例。
  *
- * @returns A new OpenAlexMetricsService.
+ * @returns 新的 OpenAlexMetricsService。
  */
 export function createOpenAlexMetricsService(): OpenAlexMetricsService {
   return new OpenAlexMetricsService();

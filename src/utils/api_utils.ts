@@ -15,11 +15,11 @@ export class UnifiedAPIClient {
       },
     });
 
-    // Unified retry strategy
+    // 统一重试策略
     axiosRetry(this.session, {
       retries: 3,
       retryDelay: (retryCount) => {
-        return retryCount * 1000; // Simplified exponential backoff approximation
+        return retryCount * 1000; // 简化的指数退避近似值
       },
       retryCondition: (error) => {
         return (
@@ -40,13 +40,13 @@ export class UnifiedAPIClient {
   }
 
   /**
-   * Sends a GET request and returns the parsed JSON payload.
+   * 发送 GET 请求并返回解析后的 JSON 载荷。
    *
-   * @param url Request URL.
-   * @param params Query parameters.
-   * @param headers Optional request headers.
-   * @param timeout Optional timeout in milliseconds.
-   * @returns Parsed JSON response body.
+   * @param url 请求 URL。
+   * @param params 查询参数。
+   * @param headers 可选请求头。
+   * @param timeout 可选超时时间，单位为毫秒。
+   * @returns 解析后的 JSON 响应体。
    */
   public async getJson<T = any>(
     url: string,
@@ -68,13 +68,13 @@ export class UnifiedAPIClient {
   }
 
   /**
-   * Sends a GET request and returns the response body as text.
+   * 发送 GET 请求并以文本形式返回响应体。
    *
-   * @param url Request URL.
-   * @param params Query parameters.
-   * @param headers Optional request headers.
-   * @param timeout Optional timeout in milliseconds.
-   * @returns Response body as text.
+   * @param url 请求 URL。
+   * @param params 查询参数。
+   * @param headers 可选请求头。
+   * @param timeout 可选超时时间，单位为毫秒。
+   * @returns 文本形式的响应体。
    */
   public async getText(
     url: string,

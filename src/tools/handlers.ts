@@ -53,10 +53,10 @@ const SEARCH_STRATEGIES: Record<string, SearchStrategy> = {
 };
 
 /**
- * Creates all Article MCP tool handlers backed by concrete services.
+ * 创建由具体服务支撑的全部 Article MCP 工具处理器。
  *
- * @param services Article MCP service container.
- * @returns Tool handlers keyed by MCP tool name.
+ * @param services Article MCP 服务容器。
+ * @returns 以 MCP 工具名称为键的工具处理器。
  */
 export function createToolHandlers(
   services: ArticleMcpServices,
@@ -103,10 +103,10 @@ async function handleSearchLiterature(
   const cacheHitsBySource: Record<string, boolean> = {};
 
   /**
-   * Records a source search result and annotates articles with source-level cache metadata.
+   * 记录单个来源的搜索结果，并为文章标注来源级缓存元数据。
    *
-   * @param source Search source name.
-   * @param result Raw service search result.
+   * @param source 搜索来源名称。
+   * @param result 服务返回的原始搜索结果。
    */
   const recordSearchResults = (source: string, result: unknown): void => {
     if (!isRecord(result) || !Array.isArray(result.articles) || !result.articles.length) {
@@ -583,12 +583,12 @@ function selectFulltextContent(fulltext: Record<string, unknown>, format: string
 }
 
 /**
- * Maps items with a maximum number of in-flight async tasks.
+ * 以指定最大并发数映射条目。
  *
- * @param items Items to process.
- * @param concurrency Maximum number of simultaneously running mapper calls.
- * @param mapper Async mapper for one item.
- * @returns Mapped results in the same order as the input items.
+ * @param items 要处理的条目。
+ * @param concurrency 同时运行的 mapper 调用上限。
+ * @param mapper 处理单个条目的异步映射函数。
+ * @returns 与输入条目顺序一致的映射结果。
  */
 async function mapWithConcurrency<T, R>(
   items: T[],
@@ -658,10 +658,10 @@ function mergeArticles(
 }
 
 /**
- * Sorts merged search results with the same source priority as the Python implementation.
+ * 按与 Python 实现一致的来源优先级排序合并后的搜索结果。
  *
- * @param articles Merged search result articles.
- * @returns Ranked article list.
+ * @param articles 合并后的搜索结果文章。
+ * @returns 排序后的文章列表。
  */
 function rankSearchResults(
   articles: Array<Record<string, unknown>>,
@@ -684,11 +684,11 @@ function rankSearchResults(
 }
 
 /**
- * Calculates the priority score of a merged article from its source metadata.
+ * 根据来源元数据计算合并文章的优先级分数。
  *
- * @param article Merged article record.
- * @param sourcePriority Ordered source priority list.
- * @returns Lower score means higher rank.
+ * @param article 合并后的文章记录。
+ * @param sourcePriority 有序来源优先级列表。
+ * @returns 分数越低，排序越靠前。
  */
 function sourcePriorityScore(article: Record<string, unknown>, sourcePriority: string[]): number {
   const sources = Array.isArray(article.sources)

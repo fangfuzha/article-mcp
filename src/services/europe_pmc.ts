@@ -1,37 +1,14 @@
 import { CacheManager, RateLimiter } from "../middleware/index.js";
+import type { ArticleDetailsResult, ArticleInfo, ArticleSearchResult } from "../types/articles.js";
 import { defaultApiClient } from "../utils/api_utils.js";
 
-interface ArticleInfo {
-  pmid: string;
-  title: string;
-  authors: string[];
-  journal_name: string;
-  publication_date: string;
-  abstract: string;
-  doi?: string;
-  pmcid?: string;
-  pmc_id?: string;
-  cache_hit?: boolean;
-}
-
-interface SearchResult {
-  articles: ArticleInfo[];
-  total_count: number;
-  error?: string;
-  message?: string;
-  cache_hit?: boolean;
-}
-
-interface ArticleDetailsResult {
-  article: ArticleInfo | null;
-  error?: string;
-}
+type SearchResult = ArticleSearchResult & { total_count: number };
 
 export class EuropePMCService {
   private baseUrl = "https://www.ebi.ac.uk/europepmc/webservices/rest/search";
   private detailUrl = "https://www.ebi.ac.uk/europepmc/webservices/rest/search";
   private referenceRootUrl = "https://www.ebi.ac.uk/europepmc/webservices/rest";
-  private rateLimitDelay = 1000; // 1 second
+  private rateLimitDelay = 1000; // 1 秒
   private headers = {
     "User-Agent": "Europe-PMC-MCP-Server/1.0",
     Accept: "application/json",
@@ -417,7 +394,7 @@ export class EuropePMCService {
     return this.cacheManager.getCachedOrFetch<SearchResult>(
       cacheKey,
       async () => {
-        // Rate limiter
+        // 限速器
         await this.rateLimiter.schedule(async () => {
           this.logger.info(`Starting async search: ${keyword}`);
         });

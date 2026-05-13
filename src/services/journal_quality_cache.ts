@@ -2,15 +2,11 @@ import { mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import type { JournalQualityCacheEntry } from "../types/journals.js";
+
 const DEFAULT_CACHE_DIR = join(homedir(), ".article_mcp_cache");
 const JOURNAL_CACHE_FILE = "journal_quality.json";
 const DEFAULT_TTL_MS = 86_400_000;
-
-export type JournalQualityCacheEntry = {
-  timestamp: number;
-  data: Record<string, unknown>;
-  openalexMetrics?: Record<string, unknown>;
-};
 
 type JournalQualityCacheFile = {
   version: string;

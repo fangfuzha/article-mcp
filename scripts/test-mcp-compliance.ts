@@ -23,11 +23,11 @@ const expectedTools = [
 ];
 
 /**
- * Recursively finds array schemas that omit an items definition.
+ * 递归查找缺少 items 定义的数组 schema。
  *
- * @param value JSON schema fragment to inspect.
- * @param path Logical schema path for diagnostics.
- * @param missing Mutable collection of missing array item paths.
+ * @param value 要检查的 JSON schema 片段。
+ * @param path 用于诊断的逻辑 schema 路径。
+ * @param missing 缺少数组 items 定义的路径集合。
  */
 function collectMissingArrayItems(value: unknown, path: string, missing: string[]): void {
   if (!value || typeof value !== "object") {
@@ -45,18 +45,18 @@ function collectMissingArrayItems(value: unknown, path: string, missing: string[
 }
 
 /**
- * Ensures the compiled MCP server exists before stdio validation.
+ * 在 stdio 验证前确保已编译的 MCP 服务器存在。
  *
- * @returns A promise that resolves when the compiled entrypoint is present.
+ * @returns 编译入口存在时完成的 Promise。
  */
 async function ensureBuiltPackage(): Promise<void> {
   await access(resolve(projectRoot, "dist", "index.js"));
 }
 
 /**
- * Runs MCP stdio compliance checks against the compiled server.
+ * 针对已编译服务器执行 MCP stdio 合规检查。
  *
- * @returns Compliance checks and calculated score.
+ * @returns 合规检查结果和计算出的分数。
  */
 async function runComplianceChecks(): Promise<{ checks: ComplianceCheck[]; score: number }> {
   await ensureBuiltPackage();
@@ -161,10 +161,10 @@ async function runComplianceChecks(): Promise<{ checks: ComplianceCheck[]; score
 }
 
 /**
- * Writes a human-readable compliance report.
+ * 写入便于阅读的合规报告。
  *
- * @param checks Individual compliance checks.
- * @param score Overall compliance score.
+ * @param checks 单项合规检查结果。
+ * @param score 总体合规分数。
  */
 async function writeReport(checks: ComplianceCheck[], score: number): Promise<void> {
   const lines = [

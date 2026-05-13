@@ -28,9 +28,9 @@ const TOOL_RUNTIME_SCHEMAS = {
 } as const;
 
 /**
- * Registers all Article MCP tools on the provided MCP server.
+ * 在给定 MCP server 上注册全部 Article MCP 工具。
  *
- * @param server MCP server instance to receive tool request handlers.
+ * @param server 用于接收工具请求处理器的 MCP server 实例。
  */
 export function registerArticleMcpTools(server: McpServer): void {
   const services = createArticleMcpServices();

@@ -17,13 +17,13 @@ export class CacheManager {
   private readonly cacheExpiry = new Map<string, number>();
 
   /**
-   * Returns a cached value when it is still fresh, otherwise fetches and stores a new value.
+   * 在缓存仍有效时返回缓存值，否则获取并写入新值。
    *
-   * @param key Cache key used to identify the value.
-   * @param fetchFunc Function used to fetch the value on cache miss or expiry.
-   * @param cacheDurationHours Cache lifetime in hours.
-   * @param useCache Whether to read from and write to the cache.
-   * @returns The fetched or cached value with an optional cache_hit marker for object payloads.
+   * @param key 用于标识缓存值的缓存键。
+   * @param fetchFunc 缓存未命中或过期时用于获取值的函数。
+   * @param cacheDurationHours 缓存有效期，单位为小时。
+   * @param useCache 是否读取和写入缓存。
+   * @returns 获取到或缓存中的值；对象载荷会附带可选的 cache_hit 标记。
    */
   public async getCachedOrFetch<T>(
     key: string,
@@ -69,12 +69,12 @@ export class CacheManager {
   }
 
   /**
-   * Stores a value and its expiry timestamp.
+   * 存储值及其过期时间戳。
    *
-   * @param key Cache key used to identify the value.
-   * @param value Value to store.
-   * @param cacheDurationHours Cache lifetime in hours.
-   * @param now Current timestamp used as expiry base.
+   * @param key 用于标识缓存值的缓存键。
+   * @param value 要存储的值。
+   * @param cacheDurationHours 缓存有效期，单位为小时。
+   * @param now 用作过期基准的当前时间戳。
    */
   private set(key: string, value: unknown, cacheDurationHours: number, now: number): void {
     this.cache.set(key, value);
@@ -88,10 +88,10 @@ export class RateLimiter {
   public constructor(private readonly delayMs: number) {}
 
   /**
-   * Runs a task after all previously scheduled tasks and enforces a delay before the next task.
+   * 在此前已调度任务之后运行任务，并在下一个任务前强制等待。
    *
-   * @param task Task to execute under the limiter.
-   * @returns The task result.
+   * @param task 要在限速器下执行的任务。
+   * @returns 任务执行结果。
    */
   public async schedule<T>(task: () => Promise<T>): Promise<T> {
     const resultPromise = this.queue.then(async () => {
@@ -117,21 +117,21 @@ export class ToolExecutionPipeline {
   }
 
   /**
-   * Adds a middleware to the end of the execution chain.
+   * 将中间件追加到执行链末尾。
    *
-   * @param middleware Middleware to add.
+   * @param middleware 要添加的中间件。
    */
   public use(middleware: ToolMiddleware): void {
     this.middleware.push(middleware);
   }
 
   /**
-   * Executes a tool through the configured middleware chain.
+   * 通过已配置的中间件链执行工具。
    *
-   * @param toolName MCP tool name.
-   * @param toolArguments Raw tool arguments received from the client.
-   * @param handler Final tool handler.
-   * @returns MCP tool call result.
+   * @param toolName MCP 工具名称。
+   * @param toolArguments 从客户端收到的原始工具参数。
+   * @param handler 最终工具处理器。
+   * @returns MCP 工具调用结果。
    */
   public async execute(
     toolName: string,
@@ -160,9 +160,9 @@ export class ToolExecutionPipeline {
 }
 
 /**
- * Creates middleware that converts tool exceptions into MCP error tool results.
+ * 创建将工具异常转换为 MCP 错误结果的中间件。
  *
- * @returns Tool middleware for exception boundaries.
+ * @returns 用于异常边界的工具中间件。
  */
 export function createErrorBoundaryMiddleware(): ToolMiddleware {
   return async (_context, next) => {
@@ -183,12 +183,12 @@ export function createErrorBoundaryMiddleware(): ToolMiddleware {
 }
 
 /**
- * Creates middleware that injects processing_time and timestamp into tool responses.
+ * 创建向工具响应注入 processing_time 和 timestamp 的中间件。
  *
  * Python 版 TimingMiddleware 自动为每个 dict 结果注入计时信息。
  * Node 版在 CallToolResult 的 content[0].text JSON 中注入相同字段。
  *
- * @returns Tool middleware for timing injection.
+ * @returns 用于计时注入的工具中间件。
  */
 export function createTimingMiddleware(): ToolMiddleware {
   return async (context, next) => {
@@ -205,12 +205,12 @@ export function createTimingMiddleware(): ToolMiddleware {
 }
 
 /**
- * Injects processing_time and timestamp into the first text content of a CallToolResult.
+ * 向 CallToolResult 的第一段文本内容注入 processing_time 和 timestamp。
  *
- * @param result Original CallToolResult from the handler.
- * @param processingTime Processing time in milliseconds.
- * @param timestamp Unix timestamp in seconds.
- * @returns Updated CallToolResult with timing injected.
+ * @param result 处理器返回的原始 CallToolResult。
+ * @param processingTime 处理耗时，单位为毫秒。
+ * @param timestamp Unix 时间戳，单位为秒。
+ * @returns 注入计时信息后的 CallToolResult。
  */
 function injectTimingIntoResult(
   result: CallToolResult,
@@ -237,12 +237,12 @@ function injectTimingIntoResult(
 }
 
 /**
- * Creates middleware that logs tool requests and responses to stderr.
+ * 创建将工具请求和响应记录到 stderr 的中间件。
  *
  * Python 版 LoggingMiddleware 记录请求方法、耗时和状态。
  * Node 版使用 console.error 写入 stderr 以避免污染 MCP stdio 协议通道。
  *
- * @returns Tool middleware for request logging.
+ * @returns 用于请求日志记录的工具中间件。
  */
 export function createLoggingMiddleware(): ToolMiddleware {
   return async (context, next) => {
@@ -267,10 +267,10 @@ export function createLoggingMiddleware(): ToolMiddleware {
 }
 
 /**
- * Formats unknown exceptions into readable tool error text.
+ * 将未知异常格式化为可读的工具错误文本。
  *
- * @param error Error thrown by a tool or parser.
- * @returns Human-readable error text.
+ * @param error 工具或解析器抛出的错误。
+ * @returns 便于阅读的错误文本。
  */
 export function formatToolError(error: unknown): string {
   if (error instanceof Error) {

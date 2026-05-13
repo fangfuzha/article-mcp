@@ -1,0 +1,35 @@
+# Changelog
+
+本文档记录 Article MCP Node 迁移版的主要变更。
+
+## 0.2.2 - 2026-05-14
+
+### 新增
+
+- 新增基于 Node.js + TypeScript 的 stdio MCP 服务入口。
+- 迁移 `search_literature`、`get_article_details`、`get_references`、`get_literature_relations` 和 `get_journal_quality` 五个核心工具。
+- 注册 `config://version`、`config://status`、`config://tools`、`stats://cache` 和 `journals://{journalName}/quality` 五个 MCP 资源。
+- 新增搜索文件缓存与期刊质量共享文件缓存，缓存目录为 `~/.article_mcp_cache/`。
+- 新增中间件执行链，覆盖错误边界、请求日志和计时字段注入。
+- 新增 Node 工程化脚本、Vitest 测试、MCP 合规检查脚本、CI 工作流和 npm 发布配置。
+
+### 变更
+
+- 使用 `McpServer` 和 `registerTool` 对齐新版 `@modelcontextprotocol/sdk` API。
+- 将 Python 参考实现移动到 `reference/`，仓库根目录保留给 Node 迁移版。
+- 增强 PMC 全文转换，支持更完整的 Markdown、XML 和 text 输出。
+- 对齐 Python 版主要参数容错语义，包括 PMCID 归一化、sections 单值/数组输入和 format 友好错误。
+- 抽取 `src/types/` 共享数据模型，统一文献和期刊相关字段定义。
+- 将源码注释统一为中文，保留 MCP、API、stdio 等专有名词。
+
+### 修复
+
+- 修复 MCP array schema 缺少 `items` 导致客户端校验失败的问题。
+- 修复工具名类型宽化导致的处理器索引类型问题。
+- 修复期刊质量缓存工具与资源不共享的问题，并增加文件级并发保护。
+- 删除 Europe PMC 服务中的同步伪接口，统一使用异步实现。
+
+### 验证
+
+- `npm run test:all` 覆盖 `typecheck`、`lint`、`build`、`test` 和 `test:mcp`。
+- MCP 合规检查目标为 `100/100`。

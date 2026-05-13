@@ -11,9 +11,9 @@ export const SERVER_NAME = "Article MCP Server";
 export const SERVER_VERSION = "0.2.2";
 
 /**
- * Creates a fully wired Article MCP server instance.
+ * 创建完成依赖装配的 Article MCP 服务器实例。
  *
- * @returns MCP server with all Article MCP tools registered.
+ * @returns 已注册全部 Article MCP 工具的 MCP server。
  */
 export function createArticleMcpServer(): McpServer {
   const server = new McpServer({
@@ -28,9 +28,9 @@ export function createArticleMcpServer(): McpServer {
 }
 
 /**
- * Starts the Article MCP server over stdio transport.
+ * 通过 stdio 传输启动 Article MCP 服务器。
  *
- * @returns A promise that resolves when the server is connected to the transport.
+ * @returns 服务器连接到传输层后完成的 Promise。
  */
 async function main(): Promise<void> {
   const server = createArticleMcpServer();

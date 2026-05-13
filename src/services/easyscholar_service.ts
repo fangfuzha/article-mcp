@@ -11,33 +11,7 @@
 
 import axios, { AxiosError } from "axios";
 
-interface QualityMetrics {
-  [key: string]: unknown;
-  impact_factor?: number;
-  quartile?: string;
-  jci?: string;
-  cas_zone?: string;
-  cas_zone_base?: string;
-  cas_zone_small?: string;
-  cas_zone_top?: string;
-}
-
-interface RankingInfo {
-  rank_in_category: number;
-  total_journals_in_category: number;
-  percentile: number;
-  assessment_method: string;
-  confidence: string;
-}
-
-interface JournalQualityResponse {
-  success: boolean;
-  journal_name: string;
-  quality_metrics: QualityMetrics;
-  ranking_info: RankingInfo;
-  data_source: string | null;
-  error?: string;
-}
+import type { JournalQualityResponse, QualityMetrics, RankingInfo } from "../types/journals.js";
 
 interface ApiResponse {
   code: number;

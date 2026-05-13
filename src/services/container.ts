@@ -19,9 +19,9 @@ export type ArticleMcpServices = {
 };
 
 /**
- * Creates the default service container used by the tool layer.
+ * 创建工具层使用的默认服务容器。
  *
- * @returns Wired services mirroring the Python dependency graph.
+ * @returns 与 Python 依赖图保持一致的已装配服务。
  */
 export function createArticleMcpServices(): ArticleMcpServices {
   const pubmed = new PubMedService();

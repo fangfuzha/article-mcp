@@ -9,7 +9,7 @@ import { parseISO, format } from "date-fns";
 import { XMLParser } from "fast-xml-parser";
 import { CacheManager, RateLimiter } from "../middleware/index.js";
 
-// Atom feed namespace
+// Atom feed 命名空间
 const ATOM_NS = "http://www.w3.org/2005/Atom";
 
 /**
