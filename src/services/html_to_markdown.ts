@@ -102,13 +102,10 @@ function convertTitles(markup: string): string {
  */
 function convertParagraphs(markup: string): string {
   return markup
-    .replace(
-      /<p\b[^>]*>([\s\S]*?)<\/p>/gi,
-      (_match, content: string) => {
-        const text = renderInlineContent(content);
-        return text ? `${text}\n\n` : "";
-      },
-    )
+    .replace(/<p\b[^>]*>([\s\S]*?)<\/p>/gi, (_match, content: string) => {
+      const text = renderInlineContent(content);
+      return text ? `${text}\n\n` : "";
+    })
     .replace(/<br\s*\/?\s*>/gi, "\n");
 }
 
@@ -141,9 +138,7 @@ function convertTables(markup: string): string {
     const rows = Array.from(tableContent.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi))
       .map((rowMatch) => {
         const rowContent = rowMatch[1] ?? "";
-        const cells = Array.from(
-          rowContent.matchAll(/<(?:th|td)\b[^>]*>([\s\S]*?)<\/(?:th|td)>/gi),
-        )
+        const cells = Array.from(rowContent.matchAll(/<(?:th|td)\b[^>]*>([\s\S]*?)<\/(?:th|td)>/gi))
           .map((cellMatch) => renderInlineContent(cellMatch[1] ?? ""))
           .filter(Boolean);
 

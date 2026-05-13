@@ -80,18 +80,18 @@ Python 到 Node 的**基础迁移已经完成**。当前 Node 版已经具备可
 
 **已对齐：** PMCID 归一化、20 个上限、并发限制 5、`fulltext_stats`、`sections` 参数传递、三种格式输出、非法 PMCID 统计、`no_fulltext` 统计、`sections=None`/空章节语义、`html_to_markdown` 独立模块。
 
-**仍缺：** 复杂格式转换的基础能力已补齐；后续主要以扩充回归测试覆盖为主。
+**仍缺：** 复杂格式转换与参数容错的核心回归测试已补齐；后续如需继续收紧行为一致性，可再补更细粒度边界测试，但当前无明确行为缺口。
 
 - [x] 提升 `convertPmcXmlToMarkdown` 的复杂结构转换（公式、表格、列表）。
-- [ ] 迁移更多 Python `test_article_tools_format_param.py` 和 `test_article_tools_pmcid_normalization.py` 的测试。
+- [x] 迁移更多 Python `test_article_tools_format_param.py` 和 `test_article_tools_pmcid_normalization.py` 的测试。
 
 ### 4.3 `get_references`
 
 **已对齐：** `UnifiedReferenceService` 编排标识符解析、多源并发、Europe PMC references endpoint、Europe PMC 批量元数据补全、DOI/标题去重、源排序、`include_metadata` 裁剪（含 `references_by_source`）。
 
-**仍缺：** 暂无显著行为缺口。Python `reference_service.py` 的剩余编排逻辑已基本等价。
+**仍缺：** 核心编排与基础回归测试已覆盖；当前无明确行为缺口。
 
-- [ ] 无新增行为改动——如有回归风险，补测即可。
+- [x] 无新增行为改动——已补空标识符与 `max_results` 回归测试。
 
 ### 4.4 `get_literature_relations`
 
@@ -121,7 +121,7 @@ Python 到 Node 的**基础迁移已经完成**。当前 Node 版已经具备可
 **Node 现状：** `@ts-nocheck` 已移除，类型检查可通过；剩余问题主要是服务 API 清理和共享类型收敛。
 
 - [x] 逐个移除 `@ts-nocheck`，补齐缺失类型、修复 NodeNext `.js` 导入、消除隐式 `any`。
-- [ ] `EuropePMCService.getArticleDetailsSync()` 改为真正的异步方法或删除。
+- [x] `EuropePMCService.getArticleDetailsSync()` 已删除，`fetch()` 统一走异步实现。
 - [ ] 注释统一为中文（除专有名词外）。
 - [ ] 抽出共享数据模型 `src/types/`，统一字段名。
 

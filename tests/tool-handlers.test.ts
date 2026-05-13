@@ -290,6 +290,88 @@ describe("tool handlers", () => {
     });
   });
 
+  it("defaults fulltext format to markdown", async () => {
+    const handlers = createToolHandlers(createMockServices());
+    const result = parseTextResult(
+      await handlers.get_article_details!({
+        pmcid: "PMC123",
+      }),
+    );
+
+    expect(result.successful).toBe(1);
+    expect(result.articles[0].fulltext).toMatchObject({
+      format: "markdown",
+      content: "## Methods\n\nMarkdown body",
+    });
+    expect(result.articles[0].fulltext).not.toHaveProperty("fulltext_xml");
+    expect(result.articles[0].fulltext).not.toHaveProperty("fulltext_text");
+  });
+
+  it("returns xml fulltext content when requested", async () => {
+    const handlers = createToolHandlers(createMockServices());
+    const result = parseTextResult(
+      await handlers.get_article_details!({
+        pmcid: "PMC123",
+        format: "xml",
+      }),
+    );
+
+    expect(result.successful).toBe(1);
+    expect(result.articles[0].fulltext).toMatchObject({
+      format: "xml",
+      content: "<body><sec><title>Methods</title><p>XML body</p></sec></body>",
+    });
+    expect(result.articles[0].fulltext).not.toHaveProperty("fulltext_markdown");
+    expect(result.articles[0].fulltext).not.toHaveProperty("fulltext_text");
+  });
+
+  it("returns a friendly error for invalid stringified PMCID arrays", async () => {
+    const handlers = createToolHandlers(createMockServices());
+    const result = parseTextResult(
+      await handlers.get_article_details!({
+        pmcid: "[PMC123, PMC456]",
+      }),
+    );
+
+    expect(result.total).toBe(1);
+    expect(result.successful).toBe(0);
+    expect(result.failed).toBe(1);
+    expect(result.articles).toEqual([]);
+    expect(result.error).toContain("pmcid 参数格式错误");
+    expect(result.error).toContain('["value"]');
+  });
+
+  it("returns an empty batch result for empty PMCID arrays", async () => {
+    const handlers = createToolHandlers(createMockServices());
+    const result = parseTextResult(
+      await handlers.get_article_details!({
+        pmcid: [],
+      }),
+    );
+
+    expect(result.total).toBe(0);
+    expect(result.successful).toBe(0);
+    expect(result.failed).toBe(0);
+    expect(result.articles).toEqual([]);
+    expect(result.fulltext_stats).toBeNull();
+  });
+
+  it("returns a friendly error object for invalid fulltext formats", async () => {
+    const handlers = createToolHandlers(createMockServices());
+    const result = parseTextResult(
+      await handlers.get_article_details!({
+        pmcid: "PMC123",
+        format: "invalid",
+      }),
+    );
+
+    expect(result.total).toBe(1);
+    expect(result.successful).toBe(0);
+    expect(result.failed).toBe(1);
+    expect(result.articles).toEqual([]);
+    expect(result.error).toContain("无效的 format 参数");
+  });
+
   it("counts invalid PMCIDs as failed and warns", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const handlers = createToolHandlers(createMockServices());
@@ -375,6 +457,39 @@ describe("tool handlers", () => {
     expect(result.merged_references[0].source).toBe("europe_pmc");
     expect(result.merged_references[0]).not.toHaveProperty("abstract");
     expect(result.references_by_source.europe_pmc[0]).not.toHaveProperty("abstract");
+  });
+
+  it("returns a friendly error when the reference identifier is empty", async () => {
+    const handlers = createToolHandlers(createMockServices());
+    const result = parseTextResult(
+      await handlers.get_references!({
+        identifier: "   ",
+        id_type: "doi",
+      }),
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("文献标识符不能为空");
+    expect(result.total_count).toBe(0);
+    expect(result.sources_used).toEqual([]);
+    expect(result.merged_references).toEqual([]);
+  });
+
+  it("limits merged references to max_results", async () => {
+    const handlers = createToolHandlers(createMockServices());
+    const result = parseTextResult(
+      await handlers.get_references!({
+        identifier: "10.1000/source",
+        id_type: "doi",
+        sources: ["crossref"],
+        max_results: 1,
+      }),
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.total_count).toBe(1);
+    expect(result.merged_references).toHaveLength(1);
+    expect(result.references_by_source.crossref).toHaveLength(2);
   });
 
   it("delegates reference orchestration to the unified reference service", async () => {

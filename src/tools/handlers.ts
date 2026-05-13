@@ -206,14 +206,47 @@ async function handleGetArticleDetails(
 ): Promise<CallToolResult> {
   const startTime = Date.now();
   const args = GetArticleDetailsArgumentsSchema.parse(toolArguments);
-  const normalizedPmcid = normalizeMaybeJsonArray(args.pmcid, "pmcid");
-  const pmcidList = Array.isArray(normalizedPmcid)
-    ? normalizedPmcid
-    : normalizedPmcid
-      ? [normalizedPmcid]
-      : [];
-  const sections = normalizeMaybeJsonArray(args.sections, "sections");
-  const sectionList = Array.isArray(sections) ? sections : sections ? [sections] : undefined;
+  let pmcidList: string[];
+  let sectionList: string[] | undefined;
+
+  try {
+    const normalizedPmcid = normalizeMaybeJsonArray(args.pmcid, "pmcid");
+    pmcidList = Array.isArray(normalizedPmcid)
+      ? normalizedPmcid
+      : normalizedPmcid
+        ? [normalizedPmcid]
+        : [];
+
+    const sections = normalizeMaybeJsonArray(args.sections, "sections");
+    sectionList = Array.isArray(sections) ? sections : sections ? [sections] : undefined;
+  } catch (error) {
+    return textResult(
+      buildArticleDetailsErrorResult(
+        Array.isArray(args.pmcid) ? args.pmcid.length : 1,
+        error instanceof Error ? error.message : String(error),
+      ),
+    );
+  }
+
+  if (!["markdown", "xml", "text"].includes(args.format)) {
+    return textResult(
+      buildArticleDetailsErrorResult(
+        pmcidList.length || 1,
+        `无效的 format 参数: ${args.format}，有效值为: markdown, xml, text`,
+      ),
+    );
+  }
+
+  if (!pmcidList.length) {
+    return textResult({
+      total: 0,
+      successful: 0,
+      failed: 0,
+      articles: [],
+      fulltext_stats: null,
+      processing_time: 0,
+    });
+  }
 
   if (pmcidList.length > 20) {
     return textResult({
@@ -525,6 +558,18 @@ function normalizePmcid(pmcid: string): string | null {
 
   const normalized = trimmed.startsWith("PMC") ? trimmed : `PMC${trimmed}`;
   return /^PMC\d+$/i.test(normalized) ? normalized.toUpperCase() : null;
+}
+
+function buildArticleDetailsErrorResult(total: number, error: string): Record<string, unknown> {
+  return {
+    total,
+    successful: 0,
+    failed: total,
+    articles: [],
+    fulltext_stats: null,
+    processing_time: 0,
+    error,
+  };
 }
 
 function selectFulltextContent(fulltext: Record<string, unknown>, format: string): unknown {
@@ -916,7 +961,8 @@ async function buildRelationNetworkData(
       continue;
     }
 
-    const expansionKey = `${current.relationType}:${current.idType}:${current.identifier}`.toLowerCase();
+    const expansionKey =
+      `${current.relationType}:${current.idType}:${current.identifier}`.toLowerCase();
     if (expanded.has(expansionKey)) {
       continue;
     }
@@ -1149,29 +1195,26 @@ function sortJournalResults<T extends { quality_metrics: Record<string, unknown>
   });
 }
 
-function metricSortValue(
-  value: unknown,
-  sortBy: string,
-): { hasValue: boolean; value: number } {
+function metricSortValue(value: unknown, sortBy: string): { hasValue: boolean; value: number } {
   if (sortBy === "quartile") {
     const normalized = String(value).trim().toUpperCase();
     const order: Record<string, number> = {
       Q1: 4,
       "1区": 4,
-      "一区": 4,
-      "中科院一区": 4,
+      一区: 4,
+      中科院一区: 4,
       Q2: 3,
       "2区": 3,
-      "二区": 3,
-      "中科院二区": 3,
+      二区: 3,
+      中科院二区: 3,
       Q3: 2,
       "3区": 2,
-      "三区": 2,
-      "中科院三区": 2,
+      三区: 2,
+      中科院三区: 2,
       Q4: 1,
       "4区": 1,
-      "四区": 1,
-      "中科院四区": 1,
+      四区: 1,
+      中科院四区: 1,
     };
     const mapped = order[normalized];
     return { hasValue: mapped !== undefined, value: mapped ?? 0 };

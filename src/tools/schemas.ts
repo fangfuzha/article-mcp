@@ -208,7 +208,7 @@ export const GetArticleDetailsArgumentsSchema = z.object({
     .union([z.string(), z.array(z.string()), z.null()])
     .optional()
     .default(null),
-  format: z.enum(["markdown", "xml", "text"]).default("markdown"),
+  format: z.string().default("markdown"),
 });
 
 export const GetReferencesArgumentsSchema = z.object({

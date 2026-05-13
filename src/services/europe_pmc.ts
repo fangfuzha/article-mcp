@@ -40,8 +40,6 @@ export class EuropePMCService {
   private searchSemaphoreMax = 3;
   private cacheManager: CacheManager;
   private rateLimiter: RateLimiter;
-  private cache: Map<string, ArticleInfo> = new Map();
-  private cacheExpiry: Map<string, number> = new Map();
 
   constructor(
     private logger: Console = console,
@@ -477,124 +475,6 @@ export class EuropePMCService {
   }
 
   /**
-   * 同步获取文献详情
-   */
-  getArticleDetailsSync(
-    identifier: string,
-    idType: string = "pmid",
-    includeFulltext: boolean = false,
-  ): ArticleDetailsResult {
-    this.logger.info(`Fetching article details: ${idType}=${identifier}`);
-
-    const fetchFromApi = (): ArticleDetailsResult | Promise<ArticleDetailsResult> => {
-      const maxRetries = 3;
-      for (let attempt = 0; attempt < maxRetries; attempt++) {
-        try {
-          let query = "";
-          if (idType.toLowerCase() === "pmid") {
-            query = `EXT_ID:${identifier}`;
-          } else if (idType.toLowerCase() === "pmcid") {
-            query = identifier.startsWith("PMC") ? `PMCID:${identifier}` : `PMCID:PMC${identifier}`;
-          } else {
-            query = `${idType.toUpperCase()}:${identifier}`;
-          }
-
-          const params = { query, format: "json", resultType: "core" };
-
-          const response = defaultApiClient.session.get(this.detailUrl, {
-            params,
-            headers: this.headers,
-            timeout: 30000,
-          });
-
-          return response
-            .then((res) => {
-              const status = res.status;
-              if (status === 429 || status === 503) {
-                if (attempt < maxRetries - 1) {
-                  throw new Error(`HTTP ${status}`);
-                }
-              }
-
-              if (status !== 200) {
-                return {
-                  error: `API request failed: HTTP ${status}`,
-                  article: null,
-                };
-              }
-
-              const data = res.data;
-              const results = data?.resultList?.result || [];
-
-              if (!results.length) {
-                return {
-                  error: `No literature found with ${idType.toUpperCase()}=${identifier}`,
-                  article: null,
-                };
-              }
-
-              const articleInfo = this.processEuropePMCArticle(results[0]);
-              return articleInfo
-                ? { article: articleInfo }
-                : {
-                    error: "Failed to process article information",
-                    article: null,
-                  };
-            })
-            .catch((error) => {
-              if (attempt < maxRetries - 1) {
-                const delay = Math.pow(2, attempt) * 1000;
-                return new Promise((resolve) =>
-                  setTimeout(
-                    () => resolve(this.getArticleDetailsSync(identifier, idType, includeFulltext)),
-                    delay,
-                  ),
-                );
-              }
-              return {
-                error: `Failed to fetch article details: ${error.message}`,
-                article: null,
-              };
-            });
-        } catch (e) {
-          if (attempt < maxRetries - 1) {
-            const delay = Math.pow(2, attempt) * 1000;
-            // Sleep and retry
-            return new Promise((resolve) =>
-              setTimeout(
-                () => resolve(this.getArticleDetailsSync(identifier, idType, includeFulltext)),
-                delay,
-              ),
-            ) as any;
-          }
-          return { error: `Unexpected error: ${e}`, article: null };
-        }
-      }
-
-      return { error: `Failed after ${maxRetries} retries`, article: null };
-    };
-
-    const cacheKey = `article_${idType}_${identifier}`;
-
-    // Check cache synchronously
-    const now = Date.now();
-    if (this.cache.has(cacheKey) && this.cacheExpiry.has(cacheKey)) {
-      const expiry = this.cacheExpiry.get(cacheKey)!;
-      if (now < expiry) {
-        return this.cache.get(cacheKey) as any;
-      }
-    }
-
-    const result = fetchFromApi() as unknown as ArticleDetailsResult;
-    if (result.article) {
-      this.cache.set(cacheKey, result.article);
-      this.cacheExpiry.set(cacheKey, now + 24 * 60 * 60 * 1000);
-    }
-
-    return result;
-  }
-
-  /**
    * 异步获取文献详情
    */
   async getArticleDetailsAsync(
@@ -731,11 +611,9 @@ export class EuropePMCService {
     includeFulltext: boolean = false,
   ): Promise<ArticleDetailsResult> {
     const startTime = Date.now();
+    void mode;
 
-    const result =
-      mode === "async"
-        ? await this.getArticleDetailsAsync(identifier, idType, includeFulltext)
-        : this.getArticleDetailsSync(identifier, idType, includeFulltext);
+    const result = await this.getArticleDetailsAsync(identifier, idType, includeFulltext);
 
     const processingTime = (Date.now() - startTime) / 1000;
     (result as any).processing_time = Math.round(processingTime * 1000) / 1000;

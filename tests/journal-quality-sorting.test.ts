@@ -68,13 +68,9 @@ describe("journal quality sorting", () => {
       }),
     );
 
-    expect(result.journal_results.map((item: Record<string, unknown>) => item.journal_name)).toEqual([
-      "Journal A",
-      "Journal D",
-      "Journal B",
-      "Journal E",
-      "Journal C",
-    ]);
+    expect(
+      result.journal_results.map((item: Record<string, unknown>) => item.journal_name),
+    ).toEqual(["Journal A", "Journal D", "Journal B", "Journal E", "Journal C"]);
     expect(result.sort_info).toEqual({ field: "impact_factor", order: "desc" });
   });
 
@@ -88,13 +84,9 @@ describe("journal quality sorting", () => {
       }),
     );
 
-    expect(result.journal_results.map((item: Record<string, unknown>) => item.journal_name)).toEqual([
-      "Journal C",
-      "Journal E",
-      "Journal B",
-      "Journal D",
-      "Journal A",
-    ]);
+    expect(
+      result.journal_results.map((item: Record<string, unknown>) => item.journal_name),
+    ).toEqual(["Journal C", "Journal E", "Journal B", "Journal D", "Journal A"]);
   });
 
   it("sorts journals by quartile using both Chinese and Q1-Q4 labels", async () => {
@@ -107,13 +99,9 @@ describe("journal quality sorting", () => {
       }),
     );
 
-    expect(result.journal_results.map((item: Record<string, unknown>) => item.journal_name)).toEqual([
-      "Journal A",
-      "Journal D",
-      "Journal B",
-      "Journal E",
-      "Journal C",
-    ]);
+    expect(
+      result.journal_results.map((item: Record<string, unknown>) => item.journal_name),
+    ).toEqual(["Journal A", "Journal D", "Journal B", "Journal E", "Journal C"]);
   });
 
   it("sorts journals by JCI descending", async () => {
@@ -126,11 +114,9 @@ describe("journal quality sorting", () => {
       }),
     );
 
-    expect(result.journal_results.map((item: Record<string, unknown>) => item.journal_name)).toEqual([
-      "Journal A",
-      "Journal B",
-      "Journal C",
-    ]);
+    expect(
+      result.journal_results.map((item: Record<string, unknown>) => item.journal_name),
+    ).toEqual(["Journal A", "Journal B", "Journal C"]);
   });
 
   it("places journals with missing metrics at the end", async () => {
@@ -143,11 +129,9 @@ describe("journal quality sorting", () => {
       }),
     );
 
-    expect(result.journal_results.map((item: Record<string, unknown>) => item.journal_name)).toEqual([
-      "Journal A",
-      "Journal B",
-      "Journal Missing",
-    ]);
+    expect(
+      result.journal_results.map((item: Record<string, unknown>) => item.journal_name),
+    ).toEqual(["Journal A", "Journal B", "Journal Missing"]);
   });
 
   it("returns batch results as a list when sorting is not requested", async () => {
@@ -158,11 +142,9 @@ describe("journal quality sorting", () => {
       }),
     );
 
-    expect(result.journal_results.map((item: Record<string, unknown>) => item.journal_name)).toEqual([
-      "Journal B",
-      "Journal A",
-      "Journal C",
-    ]);
+    expect(
+      result.journal_results.map((item: Record<string, unknown>) => item.journal_name),
+    ).toEqual(["Journal B", "Journal A", "Journal C"]);
     expect(result.sort_info).toBeNull();
   });
 });
