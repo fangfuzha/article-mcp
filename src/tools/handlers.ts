@@ -52,6 +52,15 @@ const SEARCH_STRATEGIES: Record<string, SearchStrategy> = {
   },
 };
 
+const DEFAULT_JOURNAL_INCLUDE_METRICS = ["impact_factor", "quartile", "jci"] as const;
+const OPENALEX_JOURNAL_METRIC_KEYS = [
+  "h_index",
+  "citation_rate",
+  "cited_by_count",
+  "works_count",
+  "i10_index",
+] as const;
+
 /**
  * 创建由具体服务支撑的全部 Article MCP 工具处理器。
  *
@@ -433,11 +442,11 @@ async function handleGetJournalQuality(
 ): Promise<CallToolResult> {
   const args = GetJournalQualityArgumentsSchema.parse(toolArguments);
   const journalNames = Array.isArray(args.journal_name) ? args.journal_name : [args.journal_name];
-  const includeMetrics = Array.isArray(args.include_metrics)
+  const requestedIncludeMetrics = Array.isArray(args.include_metrics)
     ? args.include_metrics
-    : args.include_metrics
+    : typeof args.include_metrics === "string"
       ? [args.include_metrics]
-      : ["impact_factor", "quartile", "jci"];
+      : null;
 
   const journalResults = await Promise.all(
     journalNames.map(async (journalName) => {
@@ -466,13 +475,23 @@ async function handleGetJournalQuality(
       }
 
       const resolvedEasyScholarResult = easyScholarResult ?? {};
+      const easyScholarMetrics = isRecord(resolvedEasyScholarResult.quality_metrics)
+        ? resolvedEasyScholarResult.quality_metrics
+        : {};
+      const resolvedOpenAlexMetrics = isRecord(openalexMetrics) ? openalexMetrics : {};
+      const hasEasyScholarMetrics = hasJournalMetricValues(easyScholarMetrics);
+      const hasOpenAlexMetrics = hasJournalMetricValues(resolvedOpenAlexMetrics, ["source"]);
+      const includeMetrics = resolveJournalIncludeMetrics(
+        requestedIncludeMetrics,
+        hasEasyScholarMetrics,
+        hasOpenAlexMetrics,
+      );
+      const openAlexOnlyFallback = !hasEasyScholarMetrics && hasOpenAlexMetrics;
 
       const qualityMetrics = filterMetrics(
         {
-          ...(isRecord(resolvedEasyScholarResult.quality_metrics)
-            ? resolvedEasyScholarResult.quality_metrics
-            : {}),
-          ...(openalexMetrics || {}),
+          ...easyScholarMetrics,
+          ...resolvedOpenAlexMetrics,
         },
         includeMetrics,
       );
@@ -481,8 +500,17 @@ async function handleGetJournalQuality(
         journal_name: journalName,
         quality_metrics: qualityMetrics,
         ranking_info: resolvedEasyScholarResult.ranking_info,
-        data_source: resolvedEasyScholarResult.data_source,
+        data_source: resolveJournalQualityDataSource(
+          resolvedEasyScholarResult.data_source,
+          hasEasyScholarMetrics,
+          hasOpenAlexMetrics,
+        ),
         include_metrics: includeMetrics,
+        ...(openAlexOnlyFallback
+          ? {
+              warning: buildJournalQualityFallbackWarning(resolvedEasyScholarResult.error),
+            }
+          : {}),
       };
     }),
   );
@@ -1164,6 +1192,89 @@ function filterMetrics(
   return Object.fromEntries(
     Object.entries(metrics).filter(([key]) => includeMetrics.includes(key)),
   );
+}
+
+/**
+ * 判断期刊指标对象是否包含实际可返回的度量值。
+ *
+ * @param metrics 指标对象。
+ * @param ignoredKeys 计算时忽略的字段名。
+ * @returns 只要存在至少一个非空指标值则返回 true。
+ */
+function hasJournalMetricValues(
+  metrics: Record<string, unknown>,
+  ignoredKeys: string[] = [],
+): boolean {
+  return Object.entries(metrics).some(([key, value]) => {
+    if (ignoredKeys.includes(key)) {
+      return false;
+    }
+
+    return value !== null && value !== undefined && value !== "";
+  });
+}
+
+/**
+ * 解析期刊质量工具的最终指标过滤列表。
+ *
+ * @param requestedIncludeMetrics 用户显式请求的指标；为 null 表示使用默认策略。
+ * @param hasEasyScholarMetrics EasyScholar 是否返回了可用指标。
+ * @param hasOpenAlexMetrics OpenAlex 是否返回了可用指标。
+ * @returns 用于最终过滤返回值的指标列表。
+ */
+function resolveJournalIncludeMetrics(
+  requestedIncludeMetrics: string[] | null,
+  hasEasyScholarMetrics: boolean,
+  hasOpenAlexMetrics: boolean,
+): string[] {
+  if (requestedIncludeMetrics) {
+    return requestedIncludeMetrics;
+  }
+
+  if (!hasEasyScholarMetrics && hasOpenAlexMetrics) {
+    return [...DEFAULT_JOURNAL_INCLUDE_METRICS, ...OPENALEX_JOURNAL_METRIC_KEYS];
+  }
+
+  return [...DEFAULT_JOURNAL_INCLUDE_METRICS];
+}
+
+/**
+ * 解析期刊质量结果的数据来源字段。
+ *
+ * @param dataSource EasyScholar 侧已有的数据来源字段。
+ * @param hasEasyScholarMetrics EasyScholar 是否返回了可用指标。
+ * @param hasOpenAlexMetrics OpenAlex 是否返回了可用指标。
+ * @returns 统一后的数据来源标识。
+ */
+function resolveJournalQualityDataSource(
+  dataSource: unknown,
+  hasEasyScholarMetrics: boolean,
+  hasOpenAlexMetrics: boolean,
+): string | null {
+  if (typeof dataSource === "string" && dataSource.trim()) {
+    return dataSource;
+  }
+
+  if (!hasEasyScholarMetrics && hasOpenAlexMetrics) {
+    return "openalex";
+  }
+
+  return null;
+}
+
+/**
+ * 为 OpenAlex 退化路径构造可读警告。
+ *
+ * @param error EasyScholar 返回的原始错误信息。
+ * @returns 面向 MCP 调用方的警告文本。
+ */
+function buildJournalQualityFallbackWarning(error: unknown): string {
+  const normalizedError = typeof error === "string" ? error.trim() : "";
+  if (normalizedError) {
+    return `EasyScholar 不可用（${normalizedError}），当前仅返回 OpenAlex 指标。`;
+  }
+
+  return "EasyScholar 不可用，当前仅返回 OpenAlex 指标。";
 }
 
 function sortJournalResults<T extends { quality_metrics: Record<string, unknown> }>(

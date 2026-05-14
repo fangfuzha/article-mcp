@@ -1,5 +1,7 @@
 # Article MCP 文献检索服务器
 
+[中文](README.md) | [English](README.en.md)
+
 > 基于 Node.js + TypeScript 的 Article MCP 迁移版本。
 >
 > **🙏 原始项目致敬**
@@ -118,6 +120,8 @@ npm start
 
 `EASYSCHOLAR_SECRET_KEY` 为可选项，但在期刊质量查询场景下建议配置，以获得更完整的指标结果。请访问 [EasyScholar](https://www.easyscholar.cc) 注册获取。
 
+未配置该密钥、密钥无效，或 EasyScholar 服务暂时不可用时，`get_journal_quality` 不会整体失败，而是自动退化为 OpenAlex-only 模式：继续返回 `h_index`、`citation_rate`、`cited_by_count`、`works_count`、`i10_index` 等 OpenAlex 指标，并在返回结果的 `warning` 字段中说明降级原因。
+
 ### 工具说明语言
 
 工具名、参数名和返回字段名保持稳定，不会随语言配置变化。工具标题、工具描述和参数说明默认使用中文；需要英文说明时，在 MCP client 配置中设置：
@@ -142,7 +146,7 @@ npm start
 | `get_article_details`      | 获取文献全文 | `pmcid`, `sections`, `format`                                                                                     |
 | `get_references`           | 获取参考文献 | `identifier`, `id_type`, `sources`, `max_results`, `include_metadata`                                             |
 | `get_literature_relations` | 文献关系分析 | `identifier` / `identifiers`, `id_type`, `relation_types`, `max_results`, `sources`, `analysis_type`, `max_depth` |
-| `get_journal_quality`      | 期刊质量评估 | `journal_name`, `include_metrics`, `use_cache`, `sort_by`, `sort_order`                                           |
+| `get_journal_quality`      | 期刊质量评估（EasyScholar 不可用时自动退化为 OpenAlex-only） | `journal_name`, `include_metrics`, `use_cache`, `sort_by`, `sort_order`                                           |
 
 ## 资源概览
 
@@ -273,6 +277,8 @@ npm start
   "include_metrics": ["impact_factor", "quartile", "jci"]
 }
 ```
+
+如果未配置有效的 `EASYSCHOLAR_SECRET_KEY`，该工具会退化为 OpenAlex-only 模式。此时返回结果会包含 OpenAlex 指标，并在 `warning` 字段中说明 EasyScholar 不可用的原因。
 
 ## 开发说明
 

@@ -137,6 +137,54 @@ describe("JournalQualityCache", () => {
     expect(openAlexMetricsSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("falls back to OpenAlex metrics when EasyScholar is unavailable", async () => {
+    const easyScholarSpy = vi.fn(async (journalName: string) => ({
+      success: false,
+      error: "EASYSCHOLAR_SECRET_KEY 环境变量未设置",
+      journal_name: journalName,
+      quality_metrics: {},
+      ranking_info: {},
+      data_source: null,
+    }));
+    const openAlexMetricsSpy = vi.fn(async () => ({
+      h_index: 100,
+      cited_by_count: 5000,
+      source: "openalex",
+    }));
+    const services = {
+      europePmc: {},
+      pubmed: {},
+      arxiv: {},
+      crossref: {},
+      referenceService: {},
+      openalex: {},
+      easyscholar: {
+        getJournalQuality: easyScholarSpy,
+      },
+      openalexMetrics: {
+        getJournalMetrics: openAlexMetricsSpy,
+        batchGetJournalMetrics: vi.fn(),
+      },
+    } as unknown as ArticleMcpServices;
+
+    const handlers = createToolHandlers(services);
+    const result = parseTextResult(
+      await handlers.get_journal_quality!({
+        journal_name: "Nature",
+        use_cache: false,
+      }),
+    );
+
+    expect(result.quality_metrics).toEqual({
+      h_index: 100,
+      cited_by_count: 5000,
+    });
+    expect(result.data_source).toBe("openalex");
+    expect(result.warning).toContain("OpenAlex");
+    expect(easyScholarSpy).toHaveBeenCalledTimes(1);
+    expect(openAlexMetricsSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps all journals when many cache writes happen concurrently", async () => {
     const cacheDir = await mkdtemp(join(tmpdir(), "journal-quality-concurrency-"));
     const cache = new JournalQualityCache(cacheDir);
