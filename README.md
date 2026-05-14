@@ -61,7 +61,19 @@ npm run dev
 npm start
 ```
 
+也支持显式子命令：
+
+```bash
+npm start -- server
+npm start -- info
+```
+
 包发布到 npm 后，也可以通过 `npx article-mcp` 启动。
+
+```bash
+npx article-mcp server
+npx article-mcp info
+```
 
 ## 客户端配置
 

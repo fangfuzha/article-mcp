@@ -61,7 +61,19 @@ If dependencies are already installed, you can start the local CLI directly:
 npm start
 ```
 
+Explicit subcommands are also available:
+
+```bash
+npm start -- server
+npm start -- info
+```
+
 After publishing to npm, you can also launch it with `npx article-mcp`.
+
+```bash
+npx article-mcp server
+npx article-mcp info
+```
 
 ## Client Configuration
 
