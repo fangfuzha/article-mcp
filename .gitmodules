@@ -1,0 +1,3 @@
+[submodule "reference/article-mcp"]
+	path = reference/article-mcp
+	url = https://github.com/gqy20/article-mcp.git

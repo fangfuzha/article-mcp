@@ -1,6 +1,6 @@
 # Article MCP Node 工程脚本
 
-本目录保存 Node 版迁移项目的工程化脚本，对应 Python 版 `reference/scripts/` 中的版本同步和 MCP 合规检查能力。
+本目录保存 Node 版迁移项目的工程化脚本，对应 Python 版 `reference/article-mcp/scripts/` 中的版本同步和 MCP 合规检查能力。
 
 ## 常用命令
 

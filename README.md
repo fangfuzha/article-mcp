@@ -322,7 +322,7 @@ src/
   types/                # 共享文献与期刊数据模型
 scripts/                # 版本同步与 MCP 合规检查脚本
 tests/                  # Vitest 回归测试
-reference/              # Python 原项目参考实现
+reference/article-mcp/  # Python 原项目参考实现
 ```
 
 ## 许可证

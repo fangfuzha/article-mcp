@@ -322,7 +322,7 @@ src/
   types/                # Shared literature and journal data models
 scripts/                # Version sync and MCP compliance scripts
 tests/                  # Vitest regression tests
-reference/              # Reference implementation from the original Python project
+reference/article-mcp/  # Reference implementation from the original Python project
 ```
 
 ## License

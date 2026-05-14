@@ -17,7 +17,7 @@
 ### 变更
 
 - 使用 `McpServer` 和 `registerTool` 对齐新版 `@modelcontextprotocol/sdk` API。
-- 将 Python 参考实现移动到 `reference/`，仓库根目录保留给 Node 迁移版。
+- 将 Python 参考实现移动到 `reference/article-mcp/`，仓库根目录保留给 Node 迁移版。
 - 增强 PMC 全文转换，支持更完整的 Markdown、XML 和 text 输出。
 - 对齐 Python 版主要参数容错语义，包括 PMCID 归一化、sections 单值/数组输入和 format 友好错误。
 - 抽取 `src/types/` 共享数据模型，统一文献和期刊相关字段定义。
