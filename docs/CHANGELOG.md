@@ -2,6 +2,12 @@
 
 本文档记录 Article MCP Node 迁移版的主要变更。
 
+## 0.2.4 - 2026-05-28
+
+### 变更
+
+- 添加 `repository`、`homepage`、`bugs` 字段，npm 包页面将指向 GitHub 仓库。
+
 ## 0.2.3 - 2026-05-28
 
 ### 变更

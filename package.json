@@ -1,6 +1,6 @@
 {
   "name": "article-mcp",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Article MCP文献搜索服务器 - Node.js implementation",
   "type": "module",
   "main": "dist/index.js",
@@ -38,6 +38,14 @@
     "arxiv"
   ],
   "author": "fangfuzha",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fangfuzha/article-mcp.git"
+  },
+  "homepage": "https://github.com/fangfuzha/article-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/fangfuzha/article-mcp/issues"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
