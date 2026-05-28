@@ -68,11 +68,11 @@ npm start -- server
 npm start -- info
 ```
 
-包发布到 npm 后，也可以通过 `npx article-mcp` 启动。
+包发布到 npm 后，也可以通过 `npx article-mcp@latest` 启动（推荐添加 `@latest` 确保使用最新版本）：
 
 ```bash
-npx article-mcp server
-npx article-mcp info
+npx article-mcp@latest server
+npx article-mcp@latest info
 ```
 
 ## 客户端配置
@@ -96,14 +96,14 @@ npx article-mcp info
 }
 ```
 
-发布到 npm 后可改用包名启动：
+发布到 npm 后可改用包名启动（推荐添加 `@latest` 确保使用最新版本）：
 
 ```json
 {
   "mcpServers": {
     "article-mcp": {
       "command": "npx",
-      "args": ["article-mcp"],
+      "args": ["article-mcp@latest"],
       "env": {
         "EASYSCHOLAR_SECRET_KEY": "your_key_here",
         "ARTICLE_MCP_LANG": "zh-CN"
@@ -120,7 +120,7 @@ npx article-mcp info
   "mcpServers": {
     "article-mcp": {
       "command": "npx",
-      "args": ["article-mcp"],
+      "args": ["article-mcp@latest"],
       "env": {
         "EASYSCHOLAR_SECRET_KEY": "your_key_here",
         "ARTICLE_MCP_LANG": "zh-CN"

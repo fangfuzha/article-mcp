@@ -68,11 +68,11 @@ npm start -- server
 npm start -- info
 ```
 
-After publishing to npm, you can also launch it with `npx article-mcp`.
+After publishing to npm, you can also launch it with `npx article-mcp@latest` (adding `@latest` is recommended to ensure the latest version):
 
 ```bash
-npx article-mcp server
-npx article-mcp info
+npx article-mcp@latest server
+npx article-mcp@latest info
 ```
 
 ## Client Configuration
@@ -96,14 +96,14 @@ For local development, run `npm run build` first and then use the compiled entry
 }
 ```
 
-After publishing to npm, you can switch to package-based startup:
+After publishing to npm, you can switch to package-based startup (adding `@latest` is recommended to ensure the latest version):
 
 ```json
 {
   "mcpServers": {
     "article-mcp": {
       "command": "npx",
-      "args": ["article-mcp"],
+      "args": ["article-mcp@latest"],
       "env": {
         "EASYSCHOLAR_SECRET_KEY": "your_key_here",
         "ARTICLE_MCP_LANG": "en"
@@ -120,7 +120,7 @@ After publishing to npm, you can switch to package-based startup:
   "mcpServers": {
     "article-mcp": {
       "command": "npx",
-      "args": ["article-mcp"],
+      "args": ["article-mcp@latest"],
       "env": {
         "EASYSCHOLAR_SECRET_KEY": "your_key_here",
         "ARTICLE_MCP_LANG": "en"
