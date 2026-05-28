@@ -82,37 +82,6 @@ async function runComplianceChecks(): Promise<{ checks: ComplianceCheck[]; score
       collectMissingArrayItems(tool.inputSchema, tool.name, missingArrayItems);
     }
 
-    // 检查资源注册
-    let resourcesResult: { resources: Array<{ uri: string }> };
-    let resourceTemplatesResult: { resourceTemplates: Array<{ uriTemplate: string }> };
-    try {
-      resourcesResult = await client.listResources();
-    } catch {
-      resourcesResult = { resources: [] };
-    }
-    try {
-      resourceTemplatesResult = await client.listResourceTemplates();
-    } catch {
-      resourceTemplatesResult = { resourceTemplates: [] };
-    }
-
-    const resourceUris = resourcesResult.resources.map((r) => r.uri);
-    const resourceTemplateUris = resourceTemplatesResult.resourceTemplates.map(
-      (rt) => rt.uriTemplate,
-    );
-    const allResourceUris = [...resourceUris, ...resourceTemplateUris];
-    const expectedResourceUris = [
-      "config://version",
-      "config://status",
-      "config://tools",
-      "stats://cache",
-    ];
-    const expectedResourceTemplates = ["journals://{journalName}/quality"];
-    const missingResources = expectedResourceUris.filter((uri) => !allResourceUris.includes(uri));
-    const missingResourceTemplates = expectedResourceTemplates.filter(
-      (tmpl) => !allResourceUris.includes(tmpl),
-    );
-
     const checks: ComplianceCheck[] = [
       {
         name: "server metadata",
@@ -142,14 +111,6 @@ async function runComplianceChecks(): Promise<{ checks: ComplianceCheck[]; score
           (tool) => tool.inputSchema?.type === "object" && tool.inputSchema.properties,
         ),
         details: "all tools expose object input schemas",
-      },
-      {
-        name: "resource registration",
-        passed: missingResources.length === 0 && missingResourceTemplates.length === 0,
-        details:
-          missingResources.length || missingResourceTemplates.length
-            ? `missing: ${[...missingResources, ...missingResourceTemplates].join(", ")}`
-            : `resources=${allResourceUris.join(", ")}`,
       },
     ];
 

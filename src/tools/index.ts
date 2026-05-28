@@ -1,12 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { SearchCache } from "../middleware/search_cache.js";
-import {
-  createErrorBoundaryMiddleware,
-  createLoggingMiddleware,
-  createTimingMiddleware,
-  ToolExecutionPipeline,
-} from "../middleware/index.js";
+import { ToolExecutionPipeline } from "../middleware/index.js";
+import { createLoggingMiddleware, createTimingMiddleware } from "../middleware/logging.js";
+import { createMCPErrorHandlingMiddleware } from "../middleware/error_handling.js";
 import { createArticleMcpServices } from "../services/container.js";
 import { JournalQualityCache } from "../services/journal_quality_cache.js";
 import { createToolDefinitions, type ArticleMcpToolName } from "./definitions.js";
@@ -38,7 +35,7 @@ export function registerArticleMcpTools(server: McpServer): void {
   const journalQualityCache = new JournalQualityCache();
   const handlers = createToolHandlers(services, searchCache, journalQualityCache);
   const pipeline = new ToolExecutionPipeline([
-    createErrorBoundaryMiddleware(),
+    createMCPErrorHandlingMiddleware(),
     createLoggingMiddleware(),
     createTimingMiddleware(),
   ]);

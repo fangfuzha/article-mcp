@@ -12,7 +12,7 @@ Article MCP provides multi-source literature retrieval over the MCP protocol for
 
 ## Migration Status
 
-The current Node version uses Python `0.2.2` as its behavior baseline. The initial migration is complete, including the stdio MCP server, 5 core tools, 5 MCP resources, file-based caching, engineering scripts, CI workflows, and release configuration.
+The current Node version uses Python `0.2.2` as its behavior baseline. The initial migration is complete, including the stdio MCP server, 5 core tools, file-based caching, engineering scripts, CI workflows, and release configuration.
 
 The aligned behavior currently covers tool input schemas, read-only tool annotations, resource registration, search caching, journal-quality caching, PMC full-text output in Markdown/XML/text, reference aggregation, literature relation network expansion, and major parameter compatibility with the Python version.
 
@@ -160,21 +160,9 @@ The current version exposes 5 read-only tools:
 | `get_literature_relations` | Literature relation analysis                                                                     | `identifier` / `identifiers`, `id_type`, `relation_types`, `max_results`, `sources`, `analysis_type`, `max_depth` |
 | `get_journal_quality`      | Journal quality evaluation with automatic OpenAlex-only fallback when EasyScholar is unavailable | `journal_name`, `include_metrics`, `use_cache`, `sort_by`, `sort_order`                                           |
 
-## Resource Overview
-
-The current version registers 5 MCP resources:
-
-| Resource URI                       | Purpose                                                     |
-| ---------------------------------- | ----------------------------------------------------------- |
-| `config://version`                 | Returns the server version                                  |
-| `config://status`                  | Returns service status and supported data sources           |
-| `config://tools`                   | Returns the tool catalog and categories                     |
-| `stats://cache`                    | Returns cache directory statistics                          |
-| `journals://{journalName}/quality` | Reads cached journal-quality data for the specified journal |
-
 ## Cache Notes
 
-Both search cache and journal-quality cache are stored under `~/.article_mcp_cache/`. Search cache uses SHA256-based keys with a 24-hour TTL. Journal-quality cache uses a shared file cache with file-level concurrency protection and is shared by the `get_journal_quality` tool and the `journals://{journalName}/quality` resource.
+Both search cache and journal-quality cache are stored under `~/.article_mcp_cache/`. Search cache uses SHA256-based keys with a 24-hour TTL. Journal-quality cache uses a shared file cache with file-level concurrency protection and is used by the `get_journal_quality` tool.
 
 ## Data Sources
 
@@ -316,7 +304,6 @@ The project uses `@modelcontextprotocol/sdk`, `zod`, `axios`, `axios-retry`, `fa
 src/
   index.ts              # MCP server entry
   middleware/           # Error boundaries, logging, timing, and search cache
-  resources/            # MCP resource registration
   services/             # External data source and aggregation services
   tools/                # Tool definitions, schemas, registration, and handlers
   types/                # Shared literature and journal data models

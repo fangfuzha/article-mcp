@@ -7,7 +7,6 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { config } from "dotenv";
 
-import { registerArticleMcpResources } from "./resources/index.js";
 import { registerArticleMcpTools } from "./tools/index.js";
 
 config();
@@ -39,13 +38,14 @@ type RunCliDependencies = {
  * @returns 已注册全部 Article MCP 工具的 MCP server。
  */
 export function createArticleMcpServer(): McpServer {
+  /// 创建 MCP 服务器实例
   const server = new McpServer({
     name: SERVER_NAME,
     version: SERVER_VERSION,
   });
 
+  /// 注册工具
   registerArticleMcpTools(server);
-  registerArticleMcpResources(server);
 
   return server;
 }
@@ -56,7 +56,9 @@ export function createArticleMcpServer(): McpServer {
  * @returns 服务器连接到传输层后完成的 Promise。
  */
 export async function startStdioServer(): Promise<void> {
+  /// 创建服务器实例并注册工具与资源
   const server = createArticleMcpServer();
+  /// 创建并连接 stdio 传输，开始监听工具调用请求
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Article MCP Server running on Node.js via stdio");
