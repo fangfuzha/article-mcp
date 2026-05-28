@@ -16,6 +16,9 @@ import {
   SearchLiteratureArgumentsSchema,
 } from "./schemas.js";
 
+/**
+ * 工具运行时 schema 映射
+ */
 const TOOL_RUNTIME_SCHEMAS = {
   search_literature: SearchLiteratureArgumentsSchema,
   get_article_details: GetArticleDetailsArgumentsSchema,

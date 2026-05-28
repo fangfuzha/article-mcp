@@ -152,12 +152,12 @@ npx article-mcp info
 
 当前版本对外暴露 5 个只读工具：
 
-| 工具名                     | 作用         | 主要参数                                                                                                          |
-| -------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `search_literature`        | 多源文献搜索 | `keyword`, `sources`, `max_results`, `search_type`, `use_cache`                                                   |
-| `get_article_details`      | 获取文献全文 | `pmcid`, `sections`, `format`                                                                                     |
-| `get_references`           | 获取参考文献 | `identifier`, `id_type`, `sources`, `max_results`, `include_metadata`                                             |
-| `get_literature_relations` | 文献关系分析 | `identifier` / `identifiers`, `id_type`, `relation_types`, `max_results`, `sources`, `analysis_type`, `max_depth` |
+| 工具名                     | 作用                                                         | 主要参数                                                                                                          |
+| -------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `search_literature`        | 多源文献搜索                                                 | `keyword`, `sources`, `max_results`, `search_type`, `use_cache`                                                   |
+| `get_article_details`      | 获取文献全文                                                 | `pmcid`, `sections`, `format`                                                                                     |
+| `get_references`           | 获取参考文献                                                 | `identifier`, `id_type`, `sources`, `max_results`, `include_metadata`                                             |
+| `get_literature_relations` | 文献关系分析                                                 | `identifier` / `identifiers`, `id_type`, `relation_types`, `max_results`, `sources`, `analysis_type`, `max_depth` |
 | `get_journal_quality`      | 期刊质量评估（EasyScholar 不可用时自动退化为 OpenAlex-only） | `journal_name`, `include_metrics`, `use_cache`, `sort_by`, `sort_order`                                           |
 
 ## 缓存说明
