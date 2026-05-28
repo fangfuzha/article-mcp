@@ -27,7 +27,7 @@
     "test:all": "npm run typecheck && npm run lint && npm run build && npm run test && npm run test:mcp",
     "version:check": "tsx scripts/sync-version.ts check",
     "version:sync": "tsx scripts/sync-version.ts sync",
-    "prepack": "npm run test:all"
+    "prepack": "cp npm-README.md README.md && npm run test:all"
   },
   "keywords": [
     "mcp",
@@ -47,14 +47,6 @@
     "url": "https://github.com/fangfuzha/article-mcp/issues"
   },
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/fangfuzha/article-mcp.git"
-  },
-  "bugs": {
-    "url": "https://github.com/fangfuzha/article-mcp/issues"
-  },
-  "homepage": "https://github.com/fangfuzha/article-mcp#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "axios": "^1.16.1",

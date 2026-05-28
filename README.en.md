@@ -130,7 +130,7 @@ After publishing to npm, you can switch to package-based startup (adding `@lates
 }
 ```
 
-`EASYSCHOLAR_SECRET_KEY` is optional, but recommended for journal-quality queries if you want more complete metrics. You can register at [EasyScholar](https://www.easyscholar.cc) to obtain a key.
+`EASYSCHOLAR_SECRET_KEY` is optional, but recommended for journal-quality queries if you want more complete metrics. You can obtain a key at [EasyScholar](https://www.easyscholar.cc/open/openKey).
 
 If the key is missing, invalid, or EasyScholar is temporarily unavailable, `get_journal_quality` does not fail as a whole. Instead, it automatically degrades to an OpenAlex-only mode and still returns `h_index`, `citation_rate`, `cited_by_count`, `works_count`, and `i10_index`, while explaining the downgrade reason in the `warning` field.
 

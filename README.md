@@ -130,7 +130,7 @@ npx article-mcp@latest info
 }
 ```
 
-`EASYSCHOLAR_SECRET_KEY` 为可选项，但在期刊质量查询场景下建议配置，以获得更完整的指标结果。请访问 [EasyScholar](https://www.easyscholar.cc) 注册获取。
+`EASYSCHOLAR_SECRET_KEY` 为可选项，但在期刊质量查询场景下建议配置，以获得更完整的指标结果。请访问 [EasyScholar](https://www.easyscholar.cc/open/openKey) 获取密钥。
 
 未配置该密钥、密钥无效，或 EasyScholar 服务暂时不可用时，`get_journal_quality` 不会整体失败，而是自动退化为 OpenAlex-only 模式：继续返回 `h_index`、`citation_rate`、`cited_by_count`、`works_count`、`i10_index` 等 OpenAlex 指标，并在返回结果的 `warning` 字段中说明降级原因。
 
