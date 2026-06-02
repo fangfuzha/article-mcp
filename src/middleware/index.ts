@@ -217,12 +217,24 @@ function injectTimingIntoResult(
   processingTime: number,
   timestamp: number,
 ): CallToolResult {
+  const structuredContent =
+    typeof result.structuredContent === "object" && result.structuredContent !== null
+      ? {
+          ...(result.structuredContent as Record<string, unknown>),
+          meta: {
+            ...((result.structuredContent as Record<string, unknown>).meta as Record<string, unknown> | undefined),
+            processing_time_ms: processingTime,
+            timestamp,
+          },
+        }
+      : result.structuredContent;
+
   const content = result.content.map((item) => {
     if (item.type === "text") {
       try {
         const parsed = JSON.parse(item.text);
         if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-          parsed.processing_time = processingTime;
+          parsed.processing_time_ms = processingTime;
           parsed.timestamp = timestamp;
           return { ...item, text: JSON.stringify(parsed) };
         }
@@ -233,7 +245,7 @@ function injectTimingIntoResult(
     return item;
   });
 
-  return { ...result, content };
+  return { ...result, structuredContent, content };
 }
 
 /**

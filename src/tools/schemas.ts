@@ -204,6 +204,42 @@ export type ToolInputSchemaMap = {
   get_journal_quality: ToolInputSchema;
 };
 
+export const ArticleMcpOutputSchema = {
+  type: "object",
+  properties: {
+    success: {
+      type: "boolean",
+      description: "Whether the tool invocation succeeded.",
+    },
+    data: {
+      description: "Tool-specific response payload.",
+    },
+    meta: {
+      type: "object",
+      description: "Operational metadata for the response.",
+      additionalProperties: true,
+    },
+    warnings: {
+      type: "array",
+      description: "Optional warning messages.",
+      items: { type: "string" },
+    },
+    error: {
+      description: "Error message when success is false.",
+    },
+  },
+  required: ["success", "data", "meta"],
+  additionalProperties: false,
+} as const;
+
+export const ArticleMcpOutputZodShape = {
+  success: z.boolean().describe("Whether the tool invocation succeeded."),
+  data: z.unknown().describe("Tool-specific response payload."),
+  meta: z.record(z.string(), z.unknown()).describe("Operational metadata for the response."),
+  warnings: z.array(z.string()).optional().describe("Optional warning messages."),
+  error: z.string().nullable().optional().describe("Error message when success is false."),
+} as const;
+
 const EN_INPUT_SCHEMA_DESCRIPTIONS: Record<keyof ToolInputSchemaMap, Record<string, string>> = {
   search_literature: {
     keyword: "Search keyword (required)",

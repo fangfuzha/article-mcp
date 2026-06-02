@@ -3,6 +3,9 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { ArticleMcpServices } from "../services/container.js";
 import { SearchCache } from "../middleware/search_cache.js";
 import { JournalQualityCache } from "../services/journal_quality_cache.js";
+import { buildArticleFulltextResourceUri } from "../resources/article_fulltext.js";
+import { buildArticleRelationsResourceUri } from "../resources/article_relations.js";
+import type { ArticleMcpToolName } from "./definitions.js";
 import {
   GetArticleDetailsArgumentsSchema,
   GetJournalQualityArgumentsSchema,
@@ -10,6 +13,7 @@ import {
   GetReferencesArgumentsSchema,
   SearchLiteratureArgumentsSchema,
 } from "./schemas.js";
+import { createStructuredToolResult } from "./result_format.js";
 
 export type ToolHandler = (toolArguments: unknown) => Promise<CallToolResult>;
 export type ToolHandlerMap = Record<string, ToolHandler>;
@@ -26,6 +30,7 @@ type ArticleDetailResult = {
 };
 
 const ARTICLE_DETAILS_CONCURRENCY = 5;
+const FULLTEXT_PREVIEW_LIMIT = 1200;
 
 const DEFAULT_SEARCH_STRATEGY: SearchStrategy = {
   defaultSources: ["europe_pmc", "pubmed", "arxiv", "crossref", "openalex"],
@@ -104,7 +109,7 @@ async function handleSearchLiterature(
     if (cached) {
       cached.cached = true;
       cached.cache_hit = true;
-      return textResult(cached as Record<string, unknown>);
+      return structuredResult("search_literature", cached as Record<string, unknown>);
     }
   }
 
@@ -206,7 +211,7 @@ async function handleSearchLiterature(
     await searchCache.set(cacheKey, result);
   }
 
-  return textResult(result);
+  return structuredResult("search_literature", result);
 }
 
 async function handleGetArticleDetails(
@@ -229,25 +234,29 @@ async function handleGetArticleDetails(
     const sections = normalizeMaybeJsonArray(args.sections, "sections");
     sectionList = Array.isArray(sections) ? sections : sections ? [sections] : undefined;
   } catch (error) {
-    return textResult(
+    return structuredResult(
+      "get_article_details",
       buildArticleDetailsErrorResult(
         Array.isArray(args.pmcid) ? args.pmcid.length : 1,
         error instanceof Error ? error.message : String(error),
       ),
+      { success: false },
     );
   }
 
   if (!["markdown", "xml", "text"].includes(args.format)) {
-    return textResult(
+    return structuredResult(
+      "get_article_details",
       buildArticleDetailsErrorResult(
         pmcidList.length || 1,
         `无效的 format 参数: ${args.format}，有效值为: markdown, xml, text`,
       ),
+      { success: false },
     );
   }
 
   if (!pmcidList.length) {
-    return textResult({
+    return structuredResult("get_article_details", {
       total: 0,
       successful: 0,
       failed: 0,
@@ -258,7 +267,9 @@ async function handleGetArticleDetails(
   }
 
   if (pmcidList.length > 20) {
-    return textResult({
+    return structuredResult(
+      "get_article_details",
+      {
       total: pmcidList.length,
       successful: 0,
       failed: pmcidList.length,
@@ -266,7 +277,9 @@ async function handleGetArticleDetails(
       fulltext_stats: null,
       processing_time: 0,
       error: `PMCID 数量超过限制，最多支持20个，当前传入${pmcidList.length}个`,
-    });
+      },
+      { success: false },
+    );
   }
 
   const articleResults = await mapWithConcurrency<string, ArticleDetailResult>(
@@ -289,9 +302,16 @@ async function handleGetArticleDetails(
       let fulltextFetched = false;
       if (fulltext.fulltext_available) {
         const content = selectFulltextContent(fulltext, args.format);
+        const resourceUri = buildArticleFulltextResourceUri(normalizedPmcid, {
+          format: args.format,
+          ...(sectionList ? { sections: sectionList } : {}),
+        });
+        const preview = truncatePreview(String(content ?? ""), FULLTEXT_PREVIEW_LIMIT);
         (article as unknown as Record<string, unknown>).fulltext = {
           format: args.format,
-          content,
+          content: preview,
+          resource_uri: resourceUri,
+          truncated: String(content ?? "").length > preview.length,
           fulltext_available: true,
           ...(fulltext.sections_requested
             ? {
@@ -313,7 +333,7 @@ async function handleGetArticleDetails(
     .filter((article) => Boolean(article));
   const fulltextFetched = articleResults.filter((result) => result.fulltextFetched).length;
 
-  return textResult({
+  return structuredResult("get_article_details", {
     total: pmcidList.length,
     successful: successfulArticles.length,
     failed: pmcidList.length - successfulArticles.length,
@@ -324,6 +344,8 @@ async function handleGetArticleDetails(
       no_fulltext: successfulArticles.length - fulltextFetched,
     },
     processing_time: Math.round(((Date.now() - startTime) / 1000) * 1000) / 1000,
+  }, {
+    meta: buildArticleDetailsMeta(successfulArticles),
   });
 }
 
@@ -332,7 +354,8 @@ async function handleGetReferences(
   toolArguments: unknown,
 ): Promise<CallToolResult> {
   const args = GetReferencesArgumentsSchema.parse(toolArguments);
-  return textResult(
+  return structuredResult(
+    "get_references",
     await services.referenceService.getReferencesAsync({
       identifier: args.identifier,
       idType: args.id_type,
@@ -421,7 +444,7 @@ async function handleGetLiteratureRelations(
         )
       : undefined;
 
-  return textResult({
+  return structuredResult("get_literature_relations", {
     success: true,
     identifier: finalIdentifiers,
     id_type: args.id_type,
@@ -432,6 +455,15 @@ async function handleGetLiteratureRelations(
     statistics: {
       total_relations: relations.reduce((sum, item) => sum + countRelationItems(item), 0),
     },
+  }, {
+    meta: buildRelationMeta(finalIdentifiers, {
+      id_type: args.id_type,
+      relation_types: args.relation_types,
+      analysis_type: args.analysis_type,
+      max_results: args.max_results,
+      max_depth: args.max_depth,
+      ...(args.sources ? { sources: args.sources } : {}),
+    }),
   });
 }
 
@@ -515,7 +547,8 @@ async function handleGetJournalQuality(
     }),
   );
 
-  return textResult(
+  return structuredResult(
+    "get_journal_quality",
     journalNames.length === 1
       ? journalResults[0]
       : {
@@ -526,19 +559,258 @@ async function handleGetJournalQuality(
   );
 }
 
-function textResult(payload: unknown): CallToolResult {
+function structuredResult(
+  toolName: ArticleMcpToolName,
+  payload: unknown,
+  options: { success?: boolean; meta?: Record<string, unknown> } = {},
+): CallToolResult {
+  const summary = buildSummary(toolName, payload);
+  const success = options.success ?? determineSuccess(payload);
+
+  return createStructuredToolResult(
+    {
+      success,
+      data: payload,
+      meta: options.meta ?? {},
+      ...(success ? {} : { error: extractErrorMessage(payload, summary) }),
+    },
+    summary,
+    buildExcerpts(toolName, payload),
+  );
+}
+
+function buildArticleDetailsMeta(articles: unknown[]): Record<string, unknown> {
+  const resourceLinks = articles
+    .filter(isRecord)
+    .map((article) => {
+      const fulltext = isRecord(article.fulltext) ? article.fulltext : null;
+      const resourceUri = typeof fulltext?.resource_uri === "string" ? fulltext.resource_uri : null;
+      if (!resourceUri) {
+        return null;
+      }
+
+      return {
+        type: "fulltext",
+        pmcid: String(article.pmcid ?? article.pmc_id ?? "").trim() || null,
+        format: typeof fulltext?.format === "string" ? fulltext.format : null,
+        resource_uri: resourceUri,
+        truncated: Boolean(fulltext?.truncated),
+      };
+    })
+    .filter(Boolean);
+
+  const truncatedCount = resourceLinks.filter(
+    (link) => isRecord(link) && link.truncated === true,
+  ).length;
+
   return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify(payload, null, 2),
-      },
-    ],
+    resource_links: resourceLinks,
+    truncation: {
+      preview_limit: FULLTEXT_PREVIEW_LIMIT,
+      total_articles: articles.length,
+      articles_with_resources: resourceLinks.length,
+      truncated_articles: truncatedCount,
+    },
+  };
+}
+
+function buildRelationMeta(
+  finalIdentifiers: string | string[] | null,
+  args: {
+    id_type: string;
+    relation_types: string[];
+    analysis_type: string;
+    max_results: number;
+    max_depth: number;
+    sources?: string[];
+  },
+): Record<string, unknown> {
+  const identifiers = Array.isArray(finalIdentifiers)
+    ? finalIdentifiers
+    : finalIdentifiers
+      ? [finalIdentifiers]
+      : [];
+
+  const resourceLinks = identifiers.map((identifier) => ({
+    type: "relations",
+    identifier,
+    resource_uri: buildArticleRelationsResourceUri({
+      identifier,
+      idType: args.id_type,
+      relationTypes: args.relation_types,
+      analysisType: args.analysis_type,
+      maxResults: args.max_results,
+      maxDepth: args.max_depth,
+      ...(args.sources ? { sources: args.sources } : {}),
+    }),
+  }));
+
+  return {
+    resource_links: resourceLinks,
+    truncation: {
+      total_identifiers: identifiers.length,
+      relation_types: args.relation_types,
+      analysis_type: args.analysis_type,
+      max_results: args.max_results,
+      max_depth: args.max_depth,
+    },
   };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function determineSuccess(payload: unknown): boolean {
+  if (!isRecord(payload)) {
+    return true;
+  }
+
+  if (payload.success === false) {
+    return false;
+  }
+
+  return !Object.prototype.hasOwnProperty.call(payload, "error");
+}
+
+function extractErrorMessage(payload: unknown, fallback: string): string {
+  if (!isRecord(payload)) {
+    return fallback;
+  }
+
+  if (typeof payload.error === "string" && payload.error.trim()) {
+    return payload.error;
+  }
+
+  return fallback;
+}
+
+function buildSummary(toolName: ArticleMcpToolName, payload: unknown): string {
+  if (!isRecord(payload)) {
+    return `${toolName} 返回了非结构化结果。`;
+  }
+
+  if (toolName === "search_literature") {
+    const keyword = String(payload.keyword ?? "").trim();
+    const sourcesUsed = Array.isArray(payload.sources_used) ? payload.sources_used : [];
+    const mergedResults = Array.isArray(payload.merged_results) ? payload.merged_results : [];
+    const totalCount = Number(payload.total_count ?? 0);
+    const sourceText = sourcesUsed.length ? sourcesUsed.join("、") : "默认来源";
+    return `关键词“${keyword || "未命名"}”在 ${sourceText} 中找到 ${totalCount} 条结果，合并后 ${mergedResults.length} 条。`;
+  }
+
+  if (toolName === "get_article_details") {
+    const successful = Number(payload.successful ?? 0);
+    const total = Number(payload.total ?? 0);
+    const fulltextStats = isRecord(payload.fulltext_stats) ? payload.fulltext_stats : null;
+    const fetched = Number(fulltextStats?.fulltext_fetched ?? 0);
+    const totalWithPmcid = Number(fulltextStats?.has_pmcid ?? successful);
+    return `已获取 ${successful}/${total} 篇文献详情，其中 ${fetched}/${totalWithPmcid} 篇返回全文。`;
+  }
+
+  if (toolName === "get_references") {
+    const identifier = String(payload.identifier ?? "").trim();
+    const mergedReferences = Array.isArray(payload.merged_references)
+      ? payload.merged_references
+      : [];
+    return `文献 ${identifier || "未知标识符"} 的参考文献已解析，共 ${mergedReferences.length} 条。`;
+  }
+
+  if (toolName === "get_literature_relations") {
+    const relations = Array.isArray(payload.relations) ? payload.relations : [];
+    const statistics = isRecord(payload.statistics) ? payload.statistics : null;
+    const totalRelations = Number(statistics?.total_relations ?? 0);
+    return `已构建 ${relations.length} 个主体的文献关系图，共 ${totalRelations} 条关系。`;
+  }
+
+  if (toolName === "get_journal_quality") {
+    if (Array.isArray(payload.journal_results)) {
+      return `已批量返回 ${payload.journal_results.length} 本期刊的质量指标。`;
+    }
+
+    const journalName = String(payload.journal_name ?? "").trim();
+    return `已返回 ${journalName || "目标期刊"} 的质量指标。`;
+  }
+
+  return "工具结果已返回。";
+}
+
+function buildExcerpts(toolName: ArticleMcpToolName, payload: unknown): string[] {
+  if (!isRecord(payload)) {
+    return [];
+  }
+
+  if (toolName === "search_literature") {
+    return extractTitles(Array.isArray(payload.merged_results) ? payload.merged_results : []);
+  }
+
+  if (toolName === "get_article_details") {
+    return extractTitles(Array.isArray(payload.articles) ? payload.articles : []);
+  }
+
+  if (toolName === "get_references") {
+    return extractTitles(Array.isArray(payload.merged_references) ? payload.merged_references : []);
+  }
+
+  if (toolName === "get_literature_relations") {
+    const relations = Array.isArray(payload.relations) ? payload.relations : [];
+    return relations.slice(0, 3).map((relation) => {
+      if (!isRecord(relation)) {
+        return String(relation);
+      }
+
+      const identifier = String(relation.identifier ?? "").trim();
+      const relationTypes = ["references", "citing", "similar"]
+        .filter((key) => Array.isArray(relation[key]))
+        .join("、");
+      return relationTypes
+        ? `${identifier || "未知主体"}：${relationTypes}`
+        : identifier || "未命名关系主体";
+    });
+  }
+
+  if (toolName === "get_journal_quality") {
+    if (Array.isArray(payload.journal_results)) {
+      return payload.journal_results.slice(0, 3).map((result) => {
+        if (!isRecord(result)) {
+          return String(result);
+        }
+
+        const journalName = String(result.journal_name ?? "").trim() || "未命名期刊";
+        const metrics = isRecord(result.quality_metrics) ? result.quality_metrics : {};
+        const impactFactor = metrics.impact_factor ?? metrics.jci ?? metrics.quartile;
+        return impactFactor !== undefined
+          ? `${journalName}：${String(impactFactor)}`
+          : journalName;
+      });
+    }
+
+    const metrics = isRecord(payload.quality_metrics) ? payload.quality_metrics : {};
+    return Object.entries(metrics)
+      .slice(0, 3)
+      .map(([key, value]) => `${key}: ${String(value)}`);
+  }
+
+  return [];
+}
+
+function extractTitles(items: unknown[]): string[] {
+  return items.slice(0, 3).map((item) => {
+    if (!isRecord(item)) {
+      return String(item);
+    }
+
+    const title = String(item.title ?? "").trim();
+    const doi = String(item.doi ?? item.DOI ?? "").trim();
+    const pmcid = String(item.pmcid ?? item.pmc_id ?? "").trim();
+    const identifier = doi || pmcid;
+
+    if (title && identifier) {
+      return `${title}（${identifier}）`;
+    }
+
+    return title || identifier || "未命名条目";
+  });
 }
 
 function countRelationItems(item: Record<string, unknown>): number {
@@ -608,6 +880,14 @@ function selectFulltextContent(fulltext: Record<string, unknown>, format: string
     return fulltext.fulltext_text;
   }
   return fulltext.fulltext_markdown;
+}
+
+function truncatePreview(text: string, limit: number): string {
+  if (text.length <= limit) {
+    return text;
+  }
+
+  return `${text.slice(0, limit).trimEnd()}\n\n[全文已截断，请通过资源 URI 重新读取完整内容]`;
 }
 
 /**

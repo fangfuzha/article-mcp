@@ -9,6 +9,7 @@ import { JournalQualityCache } from "../services/journal_quality_cache.js";
 import { createToolDefinitions, type ArticleMcpToolName } from "./definitions.js";
 import { createToolHandlers } from "./handlers.js";
 import {
+  ArticleMcpOutputZodShape,
   GetArticleDetailsArgumentsSchema,
   GetJournalQualityArgumentsSchema,
   GetLiteratureRelationsArgumentsSchema,
@@ -31,11 +32,16 @@ const TOOL_RUNTIME_SCHEMAS = {
  * 在给定 MCP server 上注册全部 Article MCP 工具。
  *
  * @param server 用于接收工具请求处理器的 MCP server 实例。
+ * @param services 可选的共享服务容器。
+ * @param searchCache 可选的共享搜索缓存。
+ * @param journalQualityCache 可选的共享期刊质量缓存。
  */
-export function registerArticleMcpTools(server: McpServer): void {
-  const services = createArticleMcpServices();
-  const searchCache = new SearchCache();
-  const journalQualityCache = new JournalQualityCache();
+export function registerArticleMcpTools(
+  server: McpServer,
+  services = createArticleMcpServices(),
+  searchCache = new SearchCache(),
+  journalQualityCache = new JournalQualityCache(),
+): void {
   const handlers = createToolHandlers(services, searchCache, journalQualityCache);
   const pipeline = new ToolExecutionPipeline([
     createMCPErrorHandlingMiddleware(),
@@ -53,6 +59,7 @@ export function registerArticleMcpTools(server: McpServer): void {
         description: tool.description,
         annotations: tool.annotations,
         inputSchema: TOOL_RUNTIME_SCHEMAS[toolName],
+        outputSchema: ArticleMcpOutputZodShape,
       },
       async (toolArguments: unknown) =>
         pipeline.execute(toolName, toolArguments, async (context) => {

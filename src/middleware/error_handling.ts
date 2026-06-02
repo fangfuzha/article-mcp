@@ -7,6 +7,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { ToolExecutionContext, ToolMiddleware, ToolNext } from "./index.js";
+import { createStructuredErrorResult } from "../tools/result_format.js";
 
 /**
  * 用户输入错误类型。
@@ -40,40 +41,26 @@ export function createMCPErrorHandlingMiddleware(logger: Console = console): Too
       if (isUserInputError(error)) {
         // 用户输入错误，返回友好的错误信息
         return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  success: false,
-                  error: `输入错误: ${errorMessage}`,
-                  error_type: errorName,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
+          ...createStructuredErrorResult(`输入错误: ${errorMessage}`),
+          structuredContent: {
+            success: false,
+            data: null,
+            meta: { error_type: errorName },
+            error: `输入错误: ${errorMessage}`,
+          },
           isError: true,
         };
       }
 
       // 系统错误，返回标准错误信息
       return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                success: false,
-                error: `系统错误: ${errorName}: ${errorMessage}`,
-                error_type: errorName,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
+        ...createStructuredErrorResult(`系统错误: ${errorName}: ${errorMessage}`),
+        structuredContent: {
+          success: false,
+          data: null,
+          meta: { error_type: errorName },
+          error: `系统错误: ${errorName}: ${errorMessage}`,
+        },
         isError: true,
       };
     }
@@ -118,20 +105,13 @@ export class StandardErrorWrapper {
         const errorName = error instanceof Error ? error.constructor.name : "UnknownError";
 
         return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  success: false,
-                  error: `${errorName}: ${errorMessage}`,
-                  error_type: errorName,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
+          ...createStructuredErrorResult(`${errorName}: ${errorMessage}`),
+          structuredContent: {
+            success: false,
+            data: null,
+            meta: { error_type: errorName },
+            error: `${errorName}: ${errorMessage}`,
+          },
           isError: true,
         };
       }

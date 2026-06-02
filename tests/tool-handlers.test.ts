@@ -6,6 +6,15 @@ import { UnifiedReferenceService } from "../src/services/reference_service.js";
 import { createToolHandlers } from "../src/tools/handlers.js";
 
 function parseTextResult(result: CallToolResult): Record<string, any> {
+  if (result.structuredContent && typeof result.structuredContent === "object") {
+    const structured = result.structuredContent as Record<string, any>;
+    const data = structured.data && typeof structured.data === "object" ? structured.data : {};
+    return {
+      ...structured,
+      ...data,
+    };
+  }
+
   const textContent = result.content.find((item) => item.type === "text");
   if (!textContent || textContent.type !== "text") {
     throw new Error("工具结果缺少文本内容");
@@ -287,6 +296,23 @@ describe("tool handlers", () => {
       format: "text",
       content: "Methods Text body",
       sections_requested: ["methods"],
+      resource_uri: "article://fulltext/PMC123?format=text&sections=methods",
+      truncated: false,
+    });
+    expect(result.meta.resource_links).toEqual([
+      {
+        type: "fulltext",
+        pmcid: "PMC123",
+        format: "text",
+        resource_uri: "article://fulltext/PMC123?format=text&sections=methods",
+        truncated: false,
+      },
+    ]);
+    expect(result.meta.truncation).toMatchObject({
+      preview_limit: expect.any(Number),
+      total_articles: 1,
+      articles_with_resources: 1,
+      truncated_articles: 0,
     });
   });
 
@@ -302,7 +328,12 @@ describe("tool handlers", () => {
     expect(result.articles[0].fulltext).toMatchObject({
       format: "markdown",
       content: "## Methods\n\nMarkdown body",
+      resource_uri: "article://fulltext/PMC123?format=markdown",
+      truncated: false,
     });
+    expect(result.meta.resource_links[0].resource_uri).toBe(
+      "article://fulltext/PMC123?format=markdown",
+    );
     expect(result.articles[0].fulltext).not.toHaveProperty("fulltext_xml");
     expect(result.articles[0].fulltext).not.toHaveProperty("fulltext_text");
   });
@@ -320,7 +351,10 @@ describe("tool handlers", () => {
     expect(result.articles[0].fulltext).toMatchObject({
       format: "xml",
       content: "<body><sec><title>Methods</title><p>XML body</p></sec></body>",
+      resource_uri: "article://fulltext/PMC123?format=xml",
+      truncated: false,
     });
+    expect(result.meta.truncation.truncated_articles).toBe(0);
     expect(result.articles[0].fulltext).not.toHaveProperty("fulltext_markdown");
     expect(result.articles[0].fulltext).not.toHaveProperty("fulltext_text");
   });
@@ -529,7 +563,7 @@ describe("tool handlers", () => {
       maxResults: 3,
       includeMetadata: false,
     });
-    expect(result).toEqual(referenceResult);
+    expect(result).toMatchObject(referenceResult);
   });
 
   it("enriches CrossRef references with Europe PMC metadata", async () => {

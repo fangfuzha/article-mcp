@@ -7,6 +7,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { config } from "dotenv";
 
+import { SearchCache } from "./middleware/search_cache.js";
+import { registerArticleMcpResources } from "./resources/index.js";
+import { createArticleMcpServices } from "./services/container.js";
+import { JournalQualityCache } from "./services/journal_quality_cache.js";
 import { registerArticleMcpTools } from "./tools/index.js";
 
 config();
@@ -44,8 +48,14 @@ export function createArticleMcpServer(): McpServer {
     version: SERVER_VERSION,
   });
 
+  const services = createArticleMcpServices();
+  const searchCache = new SearchCache();
+  const journalQualityCache = new JournalQualityCache();
+
   /// 注册工具
-  registerArticleMcpTools(server);
+  registerArticleMcpTools(server, services, searchCache, journalQualityCache);
+  /// 注册资源
+  registerArticleMcpResources(server, services);
 
   return server;
 }

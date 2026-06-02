@@ -130,7 +130,7 @@ After publishing to npm, you can switch to package-based startup (adding `@lates
 }
 ```
 
-`EASYSCHOLAR_SECRET_KEY` is optional, but recommended for journal-quality queries if you want more complete metrics. You can obtain a key at [EasyScholar](https://www.easyscholar.cc/open/openKey).
+`EASYSCHOLAR_SECRET_KEY` is optional, but recommended for journal-quality queries if you want more complete metrics. You can obtain a key at [EasyScholar](https://www.easyscholar.cc/console/user/open).
 
 If the key is missing, invalid, or EasyScholar is temporarily unavailable, `get_journal_quality` does not fail as a whole. Instead, it automatically degrades to an OpenAlex-only mode and still returns `h_index`, `citation_rate`, `cited_by_count`, `works_count`, and `i10_index`, while explaining the downgrade reason in the `warning` field.
 
@@ -155,10 +155,20 @@ The current version exposes 5 read-only tools:
 | Tool                       | Purpose                                                                                          | Main Parameters                                                                                                   |
 | -------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
 | `search_literature`        | Multi-source literature search                                                                   | `keyword`, `sources`, `max_results`, `search_type`, `use_cache`                                                   |
-| `get_article_details`      | Full-text article retrieval                                                                      | `pmcid`, `sections`, `format`                                                                                     |
+| `get_article_details`      | Full-text article retrieval with `article://fulltext/{pmcid}?format={format}&sections={sections}` resource links | `pmcid`, `sections`, `format`                                                                                     |
 | `get_references`           | Reference retrieval                                                                              | `identifier`, `id_type`, `sources`, `max_results`, `include_metadata`                                             |
-| `get_literature_relations` | Literature relation analysis                                                                     | `identifier` / `identifiers`, `id_type`, `relation_types`, `max_results`, `sources`, `analysis_type`, `max_depth` |
+| `get_literature_relations` | Literature relation analysis with `article://relations/{identifier}{?id_type,relation_types,analysis_type,max_results,max_depth,sources}` resource links | `identifier` / `identifiers`, `id_type`, `relation_types`, `max_results`, `sources`, `analysis_type`, `max_depth` |
 | `get_journal_quality`      | Journal quality evaluation with automatic OpenAlex-only fallback when EasyScholar is unavailable | `journal_name`, `include_metrics`, `use_cache`, `sort_by`, `sort_order`                                           |
+
+## Output Contract
+
+Tool calls now return both machine-readable `structuredContent` and human/LLM-facing `content`.
+
+- `structuredContent` uses a unified `{ success, data, meta, warnings, error }` envelope.
+- `content` now holds only summaries and key excerpts, not the full JSON payload.
+- `get_article_details` exposes full text on demand through the `article://fulltext/{pmcid}?format={format}&sections={sections}` resource URI.
+- `get_literature_relations` exposes relation analysis on demand through the `article://relations/{identifier}{?id_type,relation_types,analysis_type,max_results,max_depth,sources}` resource URI.
+- Resource reads are re-fetched on demand and return structured JSON errors on failure.
 
 ## Cache Notes
 
@@ -208,6 +218,7 @@ The migration keeps strong parameter compatibility so that different MCP clients
 
 - `get_article_details.pmcid` supports a single value or a list
 - `get_article_details.sections` supports a single value, a list, or null
+- `get_article_details` full-text resources use `article://fulltext/{pmcid}?format={format}&sections={sections}`
 - `get_literature_relations` supports both `identifier` and `identifiers`
 - `get_journal_quality.journal_name` and `get_journal_quality.include_metrics` support single values or lists
 

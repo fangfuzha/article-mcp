@@ -8,6 +8,19 @@
 
 - 添加 `repository`、`homepage`、`bugs` 字段，npm 包页面将指向 GitHub 仓库。
 
+## 0.2.5 - 2026-06-02
+
+### 变更
+
+- 工具输出改为统一的 `structuredContent` 包装，`content` 仅保留摘要和关键摘录。
+- 新增 `article://fulltext/{pmcid}?format={format}&sections={sections}` 全文资源，按需重取完整内容。
+- 新增 `article://relations/{identifier}{?id_type,relation_types,analysis_type,max_results,max_depth,sources}` 文献关系资源，按需重算关系分析结果。
+- 资源读取失败时返回结构化 JSON 错误，避免直接抛出裸异常。
+
+### 验证
+
+- `npx vitest run` 全部通过（76/76 测试）。
+
 ## 0.2.3 - 2026-05-28
 
 ### 变更

@@ -16,7 +16,7 @@ function makeTextResult(text: string): CallToolResult {
 }
 
 describe("TimingMiddleware", () => {
-  it("注入 processing_time 和 timestamp 到 JSON 文本结果", async () => {
+  it("注入 processing_time_ms 和 timestamp 到 JSON 文本结果", async () => {
     const middleware = createTimingMiddleware();
     const context: ToolExecutionContext = { toolName: "test_tool", arguments: {} };
     const handler: ToolNext = async () => makeTextResult(JSON.stringify({ success: true }));
@@ -25,8 +25,8 @@ describe("TimingMiddleware", () => {
     const parsed = JSON.parse((result.content[0] as { type: "text"; text: string }).text);
 
     expect(parsed.success).toBe(true);
-    expect(parsed.processing_time).toBeTypeOf("number");
-    expect(parsed.processing_time).toBeGreaterThanOrEqual(0);
+    expect(parsed.processing_time_ms).toBeTypeOf("number");
+    expect(parsed.processing_time_ms).toBeGreaterThanOrEqual(0);
     expect(parsed.timestamp).toBeTypeOf("number");
     expect(parsed.timestamp).toBeGreaterThan(0);
   });
@@ -92,7 +92,7 @@ describe("ToolExecutionPipeline with middleware stack", () => {
     const parsed = JSON.parse((result.content[0] as { type: "text"; text: string }).text);
 
     expect(parsed.result).toBe("ok");
-    expect(parsed.processing_time).toBeTypeOf("number");
+    expect(parsed.processing_time_ms).toBeTypeOf("number");
     expect(parsed.timestamp).toBeTypeOf("number");
   });
 

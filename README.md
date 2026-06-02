@@ -130,7 +130,7 @@ npx article-mcp@latest info
 }
 ```
 
-`EASYSCHOLAR_SECRET_KEY` 为可选项，但在期刊质量查询场景下建议配置，以获得更完整的指标结果。请访问 [EasyScholar](https://www.easyscholar.cc/open/openKey) 获取密钥。
+`EASYSCHOLAR_SECRET_KEY` 为可选项，但在期刊质量查询场景下建议配置，以获得更完整的指标结果。请访问 [EasyScholar](https://www.easyscholar.cc/console/user/open) 获取密钥。
 
 未配置该密钥、密钥无效，或 EasyScholar 服务暂时不可用时，`get_journal_quality` 不会整体失败，而是自动退化为 OpenAlex-only 模式：继续返回 `h_index`、`citation_rate`、`cited_by_count`、`works_count`、`i10_index` 等 OpenAlex 指标，并在返回结果的 `warning` 字段中说明降级原因。
 
@@ -155,10 +155,20 @@ npx article-mcp@latest info
 | 工具名                     | 作用                                                         | 主要参数                                                                                                          |
 | -------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
 | `search_literature`        | 多源文献搜索                                                 | `keyword`, `sources`, `max_results`, `search_type`, `use_cache`                                                   |
-| `get_article_details`      | 获取文献全文                                                 | `pmcid`, `sections`, `format`                                                                                     |
+| `get_article_details`      | 获取文献全文，并提供 `article://fulltext/{pmcid}?format={format}&sections={sections}` 资源链接 | `pmcid`, `sections`, `format`                                                                                     |
 | `get_references`           | 获取参考文献                                                 | `identifier`, `id_type`, `sources`, `max_results`, `include_metadata`                                             |
-| `get_literature_relations` | 文献关系分析                                                 | `identifier` / `identifiers`, `id_type`, `relation_types`, `max_results`, `sources`, `analysis_type`, `max_depth` |
+| `get_literature_relations` | 文献关系分析，并提供 `article://relations/{identifier}{?id_type,relation_types,analysis_type,max_results,max_depth,sources}` 资源链接 | `identifier` / `identifiers`, `id_type`, `relation_types`, `max_results`, `sources`, `analysis_type`, `max_depth` |
 | `get_journal_quality`      | 期刊质量评估（EasyScholar 不可用时自动退化为 OpenAlex-only） | `journal_name`, `include_metrics`, `use_cache`, `sort_by`, `sort_order`                                           |
+
+## 输出约定
+
+工具调用会同时返回机器可读的 `structuredContent` 和面向阅读的 `content`。
+
+- `structuredContent` 统一使用 `{ success, data, meta, warnings, error }` 包装。
+- `content` 只保留摘要和关键摘录，不再承载完整 JSON。
+- `get_article_details` 的完整全文会通过 `article://fulltext/{pmcid}?format={format}&sections={sections}` 资源按需重取。
+- `get_literature_relations` 的关系分析结果会通过 `article://relations/{identifier}{?id_type,relation_types,analysis_type,max_results,max_depth,sources}` 资源按需重算。
+- 资源读取不走服务器缓存；失败时返回结构化 JSON 错误。
 
 ## 缓存说明
 
@@ -208,7 +218,9 @@ npx article-mcp@latest info
 
 - `get_article_details` 的 `pmcid` 支持单个值或列表
 - `get_article_details` 的 `sections` 支持单个值、列表或空值
+- `get_article_details` 的全文资源 URI 使用 `article://fulltext/{pmcid}?format={format}&sections={sections}`
 - `get_literature_relations` 同时兼容 `identifier` 与 `identifiers`
+- `get_literature_relations` 的关系资源 URI 使用 `article://relations/{identifier}{?id_type,relation_types,analysis_type,max_results,max_depth,sources}`
 - `get_journal_quality` 的 `journal_name` 与 `include_metrics` 支持单值或列表
 
 ## 使用示例

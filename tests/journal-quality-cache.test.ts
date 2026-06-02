@@ -16,6 +16,15 @@ import { createToolHandlers } from "../src/tools/handlers.js";
  * @returns Parsed JSON payload.
  */
 function parseTextResult(result: CallToolResult): Record<string, unknown> {
+  if (result.structuredContent && typeof result.structuredContent === "object") {
+    const structured = result.structuredContent as Record<string, unknown>;
+    const data = structured.data && typeof structured.data === "object" ? structured.data : {};
+    return {
+      ...structured,
+      ...data,
+    };
+  }
+
   const textContent = result.content.find((item) => item.type === "text");
   if (!textContent || textContent.type !== "text") {
     throw new Error("工具结果缺少文本内容");
