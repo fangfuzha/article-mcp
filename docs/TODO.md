@@ -4,18 +4,19 @@
 
 Python 到 Node 的**基础迁移已经完成**。当前 Node 版已经具备可运行的 MCP stdio 服务、5 个核心工具、工程化脚本、测试和发布配置，可以作为 Python 版的可用替代实现。
 
-当前 Node 版已通过 `typecheck`、`lint`、`build`、`vitest`、`version:check` 和 `test:mcp`，MCP 合规检查分数为 `100/100`。入口、工具层和工程化配套均已落地。
+当前 Node 版已通过 `format:check`、`version:check`、`typecheck`、`lint`、`build`、`vitest` 和 `test:mcp`，当前测试为 `82/82` 通过，MCP 合规检查分数为 `100/100`。入口、工具层、资源层、服务层和工程化配套均已落地。
 
-尚未完成的是与 Python 版的**外部行为严格对齐**。剩余工作主要集中在少量语义差异与服务层收口，例如：更多 `get_article_details` 回归测试、`get_references` 的补测、以及若干服务层清理项。
+当前已找不到明确的 P0/P1 行为缺口；后续工作主要是持续回归补测、外部 API 兼容性观察和按实际用户反馈进行小步优化。
 
 ## 已验证命令
 
 - [x] `npm run typecheck`：执行 TypeScript 类型检查，已通过。
 - [x] `npm run lint`：执行 ESLint 代码规范检查，已通过。
-- [x] `npm test`：执行 Vitest 测试，已通过。
+- [x] `npm test`：执行 Vitest 测试，当前 82/82 通过。
 - [x] `npm run version:check`：检查 `package.json` 与 `src/index.ts` 版本一致性，已通过。
 - [x] `npm run build`：执行 tsup 构建，已通过。
 - [x] `npm run test:mcp`：启动编译后的 stdio MCP 服务并检查工具清单，已通过，得分 100/100。
+- [x] `npm run format:check`：执行 Prettier 格式检查，已通过。
 - [x] `npm run test:all`：执行完整工程化门禁（typecheck/lint/build/test/test:mcp），已通过。
 
 ---
