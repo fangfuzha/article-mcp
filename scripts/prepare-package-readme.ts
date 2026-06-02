@@ -44,7 +44,9 @@ if (command === "restore") {
     }
 
     if ((await readNormalized(source)) === (await readNormalized(target))) {
-      throw new Error("README.md already matches npm-README.md; refusing to back up a packaged README");
+      throw new Error(
+        "README.md already matches npm-README.md; refusing to back up a packaged README",
+      );
     }
 
     await copyFile(target, backup);

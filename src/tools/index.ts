@@ -1,6 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import { createLoggingMiddleware, createTimingMiddleware, ToolExecutionPipeline } from "../middleware/index.js";
+import {
+  createLoggingMiddleware,
+  createTimingMiddleware,
+  ToolExecutionPipeline,
+} from "../middleware/index.js";
 import { SearchCache } from "../middleware/search_cache.js";
 import { createMCPErrorHandlingMiddleware } from "../middleware/error_handling.js";
 import { createArticleMcpServices } from "../services/container.js";

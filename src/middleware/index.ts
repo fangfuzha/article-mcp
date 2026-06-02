@@ -222,7 +222,9 @@ function injectTimingIntoResult(
       ? {
           ...(result.structuredContent as Record<string, unknown>),
           meta: {
-            ...((result.structuredContent as Record<string, unknown>).meta as Record<string, unknown> | undefined),
+            ...((result.structuredContent as Record<string, unknown>).meta as
+              | Record<string, unknown>
+              | undefined),
             processing_time_ms: processingTime,
             timestamp,
           },

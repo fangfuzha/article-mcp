@@ -270,13 +270,13 @@ async function handleGetArticleDetails(
     return structuredResult(
       "get_article_details",
       {
-      total: pmcidList.length,
-      successful: 0,
-      failed: pmcidList.length,
-      articles: [],
-      fulltext_stats: null,
-      processing_time: 0,
-      error: `PMCID 数量超过限制，最多支持20个，当前传入${pmcidList.length}个`,
+        total: pmcidList.length,
+        successful: 0,
+        failed: pmcidList.length,
+        articles: [],
+        fulltext_stats: null,
+        processing_time: 0,
+        error: `PMCID 数量超过限制，最多支持20个，当前传入${pmcidList.length}个`,
       },
       { success: false },
     );
@@ -333,20 +333,24 @@ async function handleGetArticleDetails(
     .filter((article) => Boolean(article));
   const fulltextFetched = articleResults.filter((result) => result.fulltextFetched).length;
 
-  return structuredResult("get_article_details", {
-    total: pmcidList.length,
-    successful: successfulArticles.length,
-    failed: pmcidList.length - successfulArticles.length,
-    articles: successfulArticles,
-    fulltext_stats: {
-      has_pmcid: successfulArticles.length,
-      fulltext_fetched: fulltextFetched,
-      no_fulltext: successfulArticles.length - fulltextFetched,
+  return structuredResult(
+    "get_article_details",
+    {
+      total: pmcidList.length,
+      successful: successfulArticles.length,
+      failed: pmcidList.length - successfulArticles.length,
+      articles: successfulArticles,
+      fulltext_stats: {
+        has_pmcid: successfulArticles.length,
+        fulltext_fetched: fulltextFetched,
+        no_fulltext: successfulArticles.length - fulltextFetched,
+      },
+      processing_time: Math.round(((Date.now() - startTime) / 1000) * 1000) / 1000,
     },
-    processing_time: Math.round(((Date.now() - startTime) / 1000) * 1000) / 1000,
-  }, {
-    meta: buildArticleDetailsMeta(successfulArticles),
-  });
+    {
+      meta: buildArticleDetailsMeta(successfulArticles),
+    },
+  );
 }
 
 async function handleGetReferences(
@@ -444,27 +448,31 @@ async function handleGetLiteratureRelations(
         )
       : undefined;
 
-  return structuredResult("get_literature_relations", {
-    success: true,
-    identifier: finalIdentifiers,
-    id_type: args.id_type,
-    relation_types: args.relation_types,
-    analysis_type: args.analysis_type,
-    relations,
-    ...(networkData ? { network_data: networkData } : {}),
-    statistics: {
-      total_relations: relations.reduce((sum, item) => sum + countRelationItems(item), 0),
-    },
-  }, {
-    meta: buildRelationMeta(finalIdentifiers, {
+  return structuredResult(
+    "get_literature_relations",
+    {
+      success: true,
+      identifier: finalIdentifiers,
       id_type: args.id_type,
       relation_types: args.relation_types,
       analysis_type: args.analysis_type,
-      max_results: args.max_results,
-      max_depth: args.max_depth,
-      ...(args.sources ? { sources: args.sources } : {}),
-    }),
-  });
+      relations,
+      ...(networkData ? { network_data: networkData } : {}),
+      statistics: {
+        total_relations: relations.reduce((sum, item) => sum + countRelationItems(item), 0),
+      },
+    },
+    {
+      meta: buildRelationMeta(finalIdentifiers, {
+        id_type: args.id_type,
+        relation_types: args.relation_types,
+        analysis_type: args.analysis_type,
+        max_results: args.max_results,
+        max_depth: args.max_depth,
+        ...(args.sources ? { sources: args.sources } : {}),
+      }),
+    },
+  );
 }
 
 async function handleGetJournalQuality(
@@ -779,9 +787,7 @@ function buildExcerpts(toolName: ArticleMcpToolName, payload: unknown): string[]
         const journalName = String(result.journal_name ?? "").trim() || "未命名期刊";
         const metrics = isRecord(result.quality_metrics) ? result.quality_metrics : {};
         const impactFactor = metrics.impact_factor ?? metrics.jci ?? metrics.quartile;
-        return impactFactor !== undefined
-          ? `${journalName}：${String(impactFactor)}`
-          : journalName;
+        return impactFactor !== undefined ? `${journalName}：${String(impactFactor)}` : journalName;
       });
     }
 

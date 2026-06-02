@@ -146,9 +146,7 @@ export async function readArticleFulltextResource(
  * @param uri 资源 URI。
  * @returns 解析结果。
  */
-export function parseArticleFulltextResourceUri(
-  uri: URL,
-):
+export function parseArticleFulltextResourceUri(uri: URL):
   | {
       ok: true;
       value: {
@@ -247,9 +245,7 @@ function normalizePmcid(pmcid: string): string {
 }
 
 function normalizeSections(sections?: string[]): string[] {
-  return (sections ?? [])
-    .map((section) => section.trim())
-    .filter((section) => Boolean(section));
+  return (sections ?? []).map((section) => section.trim()).filter((section) => Boolean(section));
 }
 
 function normalizeSectionsFromQuery(sections: string | undefined): string[] | null {

@@ -152,13 +152,13 @@ Supported values are `zh-CN` (default) and `en`. After switching, you usually ne
 
 The current version exposes 5 read-only tools:
 
-| Tool                       | Purpose                                                                                          | Main Parameters                                                                                                   |
-| -------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `search_literature`        | Multi-source literature search                                                                   | `keyword`, `sources`, `max_results`, `search_type`, `use_cache`                                                   |
-| `get_article_details`      | Full-text article retrieval with `article://fulltext/{pmcid}?format={format}&sections={sections}` resource links | `pmcid`, `sections`, `format`                                                                                     |
-| `get_references`           | Reference retrieval                                                                              | `identifier`, `id_type`, `sources`, `max_results`, `include_metadata`                                             |
+| Tool                       | Purpose                                                                                                                                                  | Main Parameters                                                                                                   |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `search_literature`        | Multi-source literature search                                                                                                                           | `keyword`, `sources`, `max_results`, `search_type`, `use_cache`                                                   |
+| `get_article_details`      | Full-text article retrieval with `article://fulltext/{pmcid}?format={format}&sections={sections}` resource links                                         | `pmcid`, `sections`, `format`                                                                                     |
+| `get_references`           | Reference retrieval                                                                                                                                      | `identifier`, `id_type`, `sources`, `max_results`, `include_metadata`                                             |
 | `get_literature_relations` | Literature relation analysis with `article://relations/{identifier}{?id_type,relation_types,analysis_type,max_results,max_depth,sources}` resource links | `identifier` / `identifiers`, `id_type`, `relation_types`, `max_results`, `sources`, `analysis_type`, `max_depth` |
-| `get_journal_quality`      | Journal quality evaluation with automatic OpenAlex-only fallback when EasyScholar is unavailable | `journal_name`, `include_metrics`, `use_cache`, `sort_by`, `sort_order`                                           |
+| `get_journal_quality`      | Journal quality evaluation with automatic OpenAlex-only fallback when EasyScholar is unavailable                                                         | `journal_name`, `include_metrics`, `use_cache`, `sort_by`, `sort_order`                                           |
 
 ## Output Contract
 

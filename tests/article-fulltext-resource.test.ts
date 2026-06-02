@@ -145,18 +145,14 @@ describe("article fulltext resources", () => {
   });
 
   it("offers useful completions for template variables", async () => {
-    const template = new ResourceTemplate(
-      "article://fulltext/{pmcid}{?format,sections}",
-      {
-        list: async () => ({ resources: [] }),
-        complete: {
-          pmcid: async (value: string) => ["PMC1234567", "PMC7654321"].filter((item) => item.includes(value)),
-        },
+    const template = new ResourceTemplate("article://fulltext/{pmcid}{?format,sections}", {
+      list: async () => ({ resources: [] }),
+      complete: {
+        pmcid: async (value: string) =>
+          ["PMC1234567", "PMC7654321"].filter((item) => item.includes(value)),
       },
-    );
+    });
 
-    await expect(template.completeCallback("pmcid")?.("PMC1")).resolves.toEqual([
-      "PMC1234567",
-    ]);
+    await expect(template.completeCallback("pmcid")?.("PMC1")).resolves.toEqual(["PMC1234567"]);
   });
 });

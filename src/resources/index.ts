@@ -12,10 +12,7 @@ import { registerArticleFulltextResources } from "./article_fulltext.js";
  * @param server MCP server 实例。
  * @param services Article MCP 服务容器。
  */
-export function registerArticleMcpResources(
-  server: McpServer,
-  services: ArticleMcpServices,
-): void {
+export function registerArticleMcpResources(server: McpServer, services: ArticleMcpServices): void {
   registerArticleFulltextResources(server, services);
   registerArticleRelationResources(server, services);
 }

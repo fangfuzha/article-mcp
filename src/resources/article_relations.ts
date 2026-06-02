@@ -21,7 +21,8 @@ const ARTICLE_RELATIONS_RESOURCE_TEMPLATE = new ResourceTemplate(
       id_type: async (value) => completeEnum(value, ["auto", "doi", "pmid", "pmcid"]),
       relation_types: async (value) => completeEnum(value, ["references", "similar", "citing"]),
       analysis_type: async (value) => completeEnum(value, ["basic", "comprehensive", "network"]),
-      sources: async (value) => completeEnum(value, ["europe_pmc", "crossref", "openalex", "pubmed"]),
+      sources: async (value) =>
+        completeEnum(value, ["europe_pmc", "crossref", "openalex", "pubmed"]),
     },
   },
 );
@@ -64,7 +65,10 @@ export function buildArticleRelationsResourceUri(options: {
 }): string {
   const query = new URLSearchParams();
   query.set("id_type", options.idType?.trim() || DEFAULT_ID_TYPE);
-  query.set("relation_types", normalizeList(options.relationTypes, [...DEFAULT_RELATION_TYPES]).join(","));
+  query.set(
+    "relation_types",
+    normalizeList(options.relationTypes, [...DEFAULT_RELATION_TYPES]).join(","),
+  );
   query.set("analysis_type", options.analysisType?.trim() || DEFAULT_ANALYSIS_TYPE);
   query.set("max_results", String(options.maxResults ?? DEFAULT_MAX_RESULTS));
   query.set("max_depth", String(options.maxDepth ?? DEFAULT_MAX_DEPTH));
@@ -125,9 +129,7 @@ export async function readArticleRelationsResource(
 /**
  * 解析文献关系资源 URI。
  */
-export function parseArticleRelationsResourceUri(
-  uri: URL,
-):
+export function parseArticleRelationsResourceUri(uri: URL):
   | {
       ok: true;
       value: {
@@ -153,10 +155,9 @@ export function parseArticleRelationsResourceUri(
   }
 
   const idType = uri.searchParams.get("id_type")?.trim() || DEFAULT_ID_TYPE;
-  const relationTypes = normalizeQueryList(
-    uri.searchParams.get("relation_types") ?? undefined,
-    [...DEFAULT_RELATION_TYPES],
-  );
+  const relationTypes = normalizeQueryList(uri.searchParams.get("relation_types") ?? undefined, [
+    ...DEFAULT_RELATION_TYPES,
+  ]);
   const analysisType = uri.searchParams.get("analysis_type")?.trim() || DEFAULT_ANALYSIS_TYPE;
   const maxResults = parsePositiveInteger(uri.searchParams.get("max_results"), DEFAULT_MAX_RESULTS);
   const maxDepth = parsePositiveInteger(uri.searchParams.get("max_depth"), DEFAULT_MAX_DEPTH);
@@ -209,7 +210,9 @@ function parsePositiveInteger(value: string | null, fallback: number): number {
 function completeIdentifier(value: string): string[] {
   const candidates = ["10.1000/source", "PMC1234567", "12345"];
   const trimmed = value.trim();
-  return trimmed ? candidates.filter((candidate) => candidate.toLowerCase().includes(trimmed.toLowerCase())) : candidates;
+  return trimmed
+    ? candidates.filter((candidate) => candidate.toLowerCase().includes(trimmed.toLowerCase()))
+    : candidates;
 }
 
 function completeEnum(value: string, candidates: string[]): string[] {
