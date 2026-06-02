@@ -2,12 +2,6 @@
 
 本文档记录 Article MCP Node 迁移版的主要变更。
 
-## 0.2.4 - 2026-05-28
-
-### 变更
-
-- 添加 `repository`、`homepage`、`bugs` 字段，npm 包页面将指向 GitHub 仓库。
-
 ## 0.2.5 - 2026-06-02
 
 ### 变更
@@ -16,10 +10,17 @@
 - 新增 `article://fulltext/{pmcid}?format={format}&sections={sections}` 全文资源，按需重取完整内容。
 - 新增 `article://relations/{identifier}{?id_type,relation_types,analysis_type,max_results,max_depth,sources}` 文献关系资源，按需重算关系分析结果。
 - 资源读取失败时返回结构化 JSON 错误，避免直接抛出裸异常。
+- MCP 合规脚本增加 `outputSchema`、资源模板和真实工具调用 `structuredContent` 检查。
 
 ### 验证
 
-- `npx vitest run` 全部通过（76/76 测试）。
+- `npm run test:all` 全部通过（81/81 测试，MCP 合规 100/100）。
+
+## 0.2.4 - 2026-05-28
+
+### 变更
+
+- 添加 `repository`、`homepage`、`bugs` 字段，npm 包页面将指向 GitHub 仓库。
 
 ## 0.2.3 - 2026-05-28
 

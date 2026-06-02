@@ -72,6 +72,27 @@ describe("article fulltext resources", () => {
     });
   });
 
+  it("returns the complete fulltext resource instead of another preview", async () => {
+    const longText = `## Fulltext\n\n${"A".repeat(2500)}`;
+    const services = createMockServices();
+    services.pubmed.getPMCFulltextHtmlAsync = vi.fn(async () => ({
+      pmc_id: "PMC123",
+      fulltext_xml: "<body />",
+      fulltext_markdown: longText,
+      fulltext_text: longText,
+      fulltext_available: true,
+      sections_found: [],
+      sections_missing: [],
+    })) as any;
+
+    const result = await readArticleFulltextResource(
+      new URL("article://fulltext/PMC123?format=markdown"),
+      services,
+    );
+
+    expect((result.contents[0] as { text?: string }).text).toBe(longText);
+  });
+
   it("returns structured JSON errors when fulltext is unavailable", async () => {
     const services = createMockServices();
     services.pubmed.getPMCFulltextHtmlAsync = vi.fn(async () => ({
@@ -89,6 +110,38 @@ describe("article fulltext resources", () => {
     expect(content.mimeType).toBe("application/json");
     expect(content.text).toContain("No fulltext available");
     expect(content.text).toContain('"success": false');
+  });
+
+  it("returns structured JSON errors for unsupported resource formats", async () => {
+    const services = createMockServices();
+    const result = await readArticleFulltextResource(
+      new URL("article://fulltext/PMC123?format=pdf"),
+      services,
+    );
+
+    const content = result.contents[0] as { mimeType?: string; text?: string };
+    expect(services.pubmed.getPMCFulltextHtmlAsync).not.toHaveBeenCalled();
+    expect(content.mimeType).toBe("application/json");
+    expect(content.text).toContain("不支持的全文资源格式");
+    expect(content.text).toContain('"success": false');
+  });
+
+  it("returns structured JSON errors when fulltext fetching throws", async () => {
+    const services = createMockServices();
+    services.pubmed.getPMCFulltextHtmlAsync = vi.fn(async () => {
+      throw new Error("PubMed request failed");
+    }) as any;
+
+    const result = await readArticleFulltextResource(
+      new URL("article://fulltext/PMC123?format=text"),
+      services,
+    );
+
+    const content = result.contents[0] as { mimeType?: string; text?: string };
+    expect(content.mimeType).toBe("application/json");
+    expect(content.text).toContain("PubMed request failed");
+    expect(content.text).toContain('"success": false');
+    expect(content.text).toContain('"pmcid": "PMC123"');
   });
 
   it("offers useful completions for template variables", async () => {

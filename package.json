@@ -24,10 +24,13 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:mcp": "tsx scripts/test-mcp-compliance.ts",
-    "test:all": "npm run typecheck && npm run lint && npm run build && npm run test && npm run test:mcp",
+    "test:all": "npm run version:check && npm run typecheck && npm run lint && npm run build && npm run test && npm run test:mcp",
     "version:check": "tsx scripts/sync-version.ts check",
     "version:sync": "tsx scripts/sync-version.ts sync",
-    "prepack": "cp npm-README.md README.md && npm run test:all"
+    "prepare:readme": "tsx scripts/prepare-package-readme.ts",
+    "restore:readme": "tsx scripts/prepare-package-readme.ts restore",
+    "prepack": "npm run test:all && npm run prepare:readme",
+    "postpack": "npm run restore:readme"
   },
   "keywords": [
     "mcp",

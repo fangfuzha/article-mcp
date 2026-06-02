@@ -264,7 +264,11 @@ export function createLoggingMiddleware(): ToolMiddleware {
       const result = await next(context);
       const elapsed = Date.now() - startTime;
 
-      console.error(`[MCP] ${context.toolName} 处理成功, 耗时 ${elapsed}ms`);
+      if (result.isError) {
+        console.error(`[MCP] ${context.toolName} 处理失败, 耗时 ${elapsed}ms`);
+      } else {
+        console.error(`[MCP] ${context.toolName} 处理成功, 耗时 ${elapsed}ms`);
+      }
 
       return result;
     } catch (error) {

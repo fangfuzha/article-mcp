@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
+import { createMCPErrorHandlingMiddleware } from "../src/middleware/error_handling.js";
 import {
   createErrorBoundaryMiddleware,
   createLoggingMiddleware,
@@ -105,5 +106,30 @@ describe("ToolExecutionPipeline with middleware stack", () => {
     const result = await pipeline.execute("test_tool", {}, handler);
     expect(result.isError).toBe(true);
     expect((result.content[0] as { type: "text"; text: string }).text).toContain("处理器内部错误");
+  });
+
+  it("生产中间件顺序会给结构化错误结果注入 timing metadata", async () => {
+    const stderrSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const pipeline = new ToolExecutionPipeline([
+      createLoggingMiddleware(),
+      createTimingMiddleware(),
+      createMCPErrorHandlingMiddleware(),
+    ]);
+    const handler: ToolNext = async () => {
+      throw new Error("生产路径错误");
+    };
+
+    const result = await pipeline.execute("test_tool", {}, handler);
+    const structuredContent = result.structuredContent as Record<string, any>;
+    const meta = structuredContent.meta as Record<string, any>;
+
+    expect(result.isError).toBe(true);
+    expect(structuredContent.success).toBe(false);
+    expect(structuredContent.error).toContain("生产路径错误");
+    expect(meta.processing_time_ms).toBeTypeOf("number");
+    expect(meta.timestamp).toBeTypeOf("number");
+    expect(stderrSpy.mock.calls.at(-1)?.[0]).toContain("失败");
+
+    stderrSpy.mockRestore();
   });
 });

@@ -47,6 +47,9 @@ jobs:
       - name: Run release checks
         run: npm run test:all
 
+      - name: Prepare npm README
+        run: npm run prepare:readme -- --no-backup
+
       - name: Pack package
         run: npm pack --dry-run --ignore-scripts
 

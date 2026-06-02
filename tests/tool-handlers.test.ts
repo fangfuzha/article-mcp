@@ -183,6 +183,25 @@ function createMockServices(): ArticleMcpServices {
 }
 
 describe("tool handlers", () => {
+  it("keeps readable content as summary and key excerpts instead of JSON payload", async () => {
+    const handlers = createToolHandlers(createMockServices());
+    const result = await handlers.search_literature!({
+      keyword: "summary",
+      sources: ["pubmed", "europe_pmc"],
+      max_results: 5,
+    });
+
+    const textContent = result.content.find((item) => item.type === "text");
+
+    expect(result.structuredContent).toMatchObject({ success: true });
+    expect(textContent?.type).toBe("text");
+    if (textContent?.type === "text") {
+      expect(textContent.text).toContain("找到");
+      expect(textContent.text).toContain("关键摘录:");
+      expect(() => JSON.parse(textContent.text)).toThrow();
+    }
+  });
+
   it("applies precise search strategy as intersection merge", async () => {
     const handlers = createToolHandlers(createMockServices());
     const result = parseTextResult(

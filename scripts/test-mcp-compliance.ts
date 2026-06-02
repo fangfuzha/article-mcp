@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 
 type ComplianceCheck = {
   name: string;
@@ -74,13 +75,42 @@ async function runComplianceChecks(): Promise<{ checks: ComplianceCheck[]; score
   try {
     const version = client.getServerVersion();
     const toolsResult = await client.listTools();
+    const templatesResult = await client.listResourceTemplates();
     const toolNames = toolsResult.tools.map((tool) => tool.name);
+    const resourceTemplateUris = templatesResult.resourceTemplates.map(
+      (template) => template.uriTemplate,
+    );
     const missingTools = expectedTools.filter((toolName) => !toolNames.includes(toolName));
     const missingArrayItems: string[] = [];
+    const missingOutputSchemas = toolsResult.tools
+      .filter((tool) => !tool.outputSchema)
+      .map((tool) => tool.name);
+    const missingResourceTemplates = [
+      "article://fulltext/{pmcid}{?format,sections}",
+      "article://relations/{identifier}{?id_type,relation_types,analysis_type,max_results,max_depth,sources}",
+    ].filter((uriTemplate) => !resourceTemplateUris.includes(uriTemplate));
 
     for (const tool of toolsResult.tools) {
       collectMissingArrayItems(tool.inputSchema, tool.name, missingArrayItems);
     }
+
+    const structuredCallResult = await client.callTool(
+      {
+        name: "get_references",
+        arguments: {
+          identifier: "",
+          id_type: "doi",
+          sources: ["crossref"],
+          max_results: 1,
+        },
+      },
+      CallToolResultSchema,
+    );
+
+    const structuredContent = structuredCallResult.structuredContent as
+      | Record<string, unknown>
+      | undefined;
+    const structuredMeta = structuredContent?.meta as Record<string, unknown> | undefined;
 
     const checks: ComplianceCheck[] = [
       {
@@ -111,6 +141,35 @@ async function runComplianceChecks(): Promise<{ checks: ComplianceCheck[]; score
           (tool) => tool.inputSchema?.type === "object" && tool.inputSchema.properties,
         ),
         details: "all tools expose object input schemas",
+      },
+      {
+        name: "output schemas",
+        passed: missingOutputSchemas.length === 0,
+        details: missingOutputSchemas.length
+          ? `missing=${missingOutputSchemas.join(", ")}`
+          : "all tools expose structured output schemas",
+      },
+      {
+        name: "resource templates",
+        passed: missingResourceTemplates.length === 0,
+        details: missingResourceTemplates.length
+          ? `missing=${missingResourceTemplates.join(", ")}`
+          : `registered=${resourceTemplateUris.join(", ")}`,
+      },
+      {
+        name: "structured call envelope",
+        passed:
+          structuredContent?.success === false &&
+          Boolean(structuredContent.error) &&
+          typeof structuredMeta?.processing_time_ms === "number" &&
+          typeof structuredMeta?.timestamp === "number",
+        details: JSON.stringify({
+          success: structuredContent?.success,
+          data: structuredContent?.data,
+          hasError: Boolean(structuredContent?.error),
+          processing_time_ms: structuredMeta?.processing_time_ms,
+          timestamp: structuredMeta?.timestamp,
+        }),
       },
     ];
 
@@ -143,6 +202,6 @@ async function writeReport(checks: ComplianceCheck[], score: number): Promise<vo
 const { checks, score } = await runComplianceChecks();
 await writeReport(checks, score);
 
-if (score < 80) {
+if (checks.some((check) => !check.passed)) {
   process.exitCode = 1;
 }

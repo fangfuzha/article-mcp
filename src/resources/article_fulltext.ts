@@ -5,7 +5,6 @@ import type { ArticleMcpServices } from "../services/container.js";
 
 const DEFAULT_FORMAT = "markdown" as const;
 const SUPPORTED_FORMATS = ["markdown", "xml", "text"] as const;
-const MAX_INLINE_PREVIEW_LENGTH = 1800;
 
 export type ArticleFulltextResourceOptions = {
   format?: string;
@@ -100,12 +99,26 @@ export async function readArticleFulltextResource(
   }
 
   const { pmcid, format, sections } = parsed.value;
-  const fulltext = await services.pubmed.getPMCFulltextHtmlAsync(pmcid, sections ?? undefined);
+  let fulltext: Record<string, unknown>;
+
+  try {
+    fulltext = await services.pubmed.getPMCFulltextHtmlAsync(pmcid, sections ?? undefined);
+  } catch (error) {
+    return createJsonErrorResourceResult(
+      uri,
+      error instanceof Error ? error.message : String(error),
+      {
+        pmcid,
+        format,
+        sections,
+      },
+    );
+  }
 
   if (!fulltext.fulltext_available) {
     return createJsonErrorResourceResult(
       uri,
-      fulltext.error ?? `未找到 ${pmcid} 的全文内容`,
+      typeof fulltext.error === "string" ? fulltext.error : `未找到 ${pmcid} 的全文内容`,
       {
         pmcid,
         format,
@@ -115,14 +128,13 @@ export async function readArticleFulltextResource(
   }
 
   const selectedContent = selectFulltextContent(fulltext, format);
-  const resourceText = truncatePreview(String(selectedContent ?? ""), MAX_INLINE_PREVIEW_LENGTH);
 
   return {
     contents: [
       {
         uri: uri.href,
         mimeType: mimeTypeForFormat(format),
-        text: resourceText,
+        text: String(selectedContent ?? ""),
       },
     ],
   };
@@ -152,7 +164,7 @@ export function parseArticleFulltextResourceUri(
 
   try {
     const pmcid = normalizePmcid(decodeURIComponent(uri.pathname.replace(/^\//, "")));
-    const format = normalizeFormat(uri.searchParams.get("format") ?? undefined);
+    const format = parseResourceFormat(uri.searchParams.get("format") ?? undefined);
     const sections = normalizeSectionsFromQuery(uri.searchParams.get("sections") ?? undefined);
 
     return {
@@ -215,6 +227,15 @@ function normalizeFormat(format: string | undefined): string {
     : DEFAULT_FORMAT;
 }
 
+function parseResourceFormat(format: string | undefined): string {
+  const candidate = (format ?? DEFAULT_FORMAT).trim().toLowerCase();
+  if (SUPPORTED_FORMATS.includes(candidate as (typeof SUPPORTED_FORMATS)[number])) {
+    return candidate;
+  }
+
+  throw new Error(`不支持的全文资源格式: ${format}. 支持的格式: ${SUPPORTED_FORMATS.join(", ")}`);
+}
+
 function normalizePmcid(pmcid: string): string {
   const trimmed = pmcid.trim();
   const withPrefix = trimmed.toUpperCase().startsWith("PMC") ? trimmed : `PMC${trimmed}`;
@@ -268,14 +289,6 @@ function selectFulltextContent(fulltext: Record<string, unknown>, format: string
   }
 
   return String(fulltext.fulltext_markdown ?? "");
-}
-
-function truncatePreview(text: string, limit: number): string {
-  if (text.length <= limit) {
-    return text;
-  }
-
-  return `${text.slice(0, limit).trimEnd()}\n\n[全文已截断，请通过资源 URI 重新读取完整内容]`;
 }
 
 function completePmcid(value: string): string[] {

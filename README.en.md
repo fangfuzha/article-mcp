@@ -16,7 +16,7 @@ The current Node version uses Python `0.2.2` as its behavior baseline. The initi
 
 The aligned behavior currently covers tool input schemas, read-only tool annotations, search caching, journal-quality caching, PMC full-text output in Markdown/XML/text, reference aggregation, literature relation network expansion, and major parameter compatibility with the Python version.
 
-The release gate is `npm run test:all`, which covers TypeScript type checking, ESLint, production build, Vitest, and MCP stdio compliance checks.
+The release gate is `npm run test:all`, which covers version consistency checks, TypeScript type checking, ESLint, production build, Vitest, and MCP stdio compliance checks.
 
 ## Core Capabilities
 
@@ -40,7 +40,7 @@ The release gate is `npm run test:all`, which covers TypeScript type checking, E
 ### Install and Run
 
 ```bash
-git clone https://github.com/gqy20/article-mcp.git
+git clone https://github.com/fangfuzha/article-mcp.git
 cd article-mcp
 npm install
 npm run build
