@@ -12,6 +12,7 @@
 - 资源读取失败时返回结构化 JSON 错误，避免直接抛出裸异常。
 - MCP 合规脚本增加 `outputSchema`、资源模板和真实工具调用 `structuredContent` 检查。
 - 服务容器注入 stdio-safe logger，避免后台检索日志写入 stdout 污染 MCP 协议通道。
+- 默认服务构造器和导出单例复用 stdio-safe logger，并增加回归测试覆盖。
 
 ### 验证
 

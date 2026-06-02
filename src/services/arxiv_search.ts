@@ -8,6 +8,7 @@ import axiosRetry from "axios-retry";
 import { parseISO, format } from "date-fns";
 import { XMLParser } from "fast-xml-parser";
 import { CacheManager, RateLimiter } from "../middleware/index.js";
+import { stdioSafeLogger } from "../utils/stdio_safe_logger.js";
 
 // Atom feed 命名空间
 const ATOM_NS = "http://www.w3.org/2005/Atom";
@@ -22,7 +23,7 @@ export class ArxivSearchService {
   private parser: XMLParser;
   private baseUrl = "http://export.arxiv.org/api/query?";
 
-  constructor(private readonly logger: Pick<Console, "error" | "warn" | "info"> = console) {
+  constructor(private readonly logger: Pick<Console, "error" | "warn" | "info"> = stdioSafeLogger) {
     this.session = this.createRetrySession();
     this.cacheManager = new CacheManager();
     this.rateLimiter = new RateLimiter(1000); // 1秒延迟

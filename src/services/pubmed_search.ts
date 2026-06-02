@@ -10,6 +10,7 @@ import type {
   SimilarArticlesResult,
 } from "../types/articles.js";
 import { defaultApiClient } from "../utils/api_utils.js";
+import { stdioSafeLogger } from "../utils/stdio_safe_logger.js";
 
 type SearchResult = ArticleSearchResult;
 
@@ -49,7 +50,7 @@ export class PubMedService {
   private readonly rateLimiter: RateLimiter;
   private readonly parser: XMLParser;
 
-  public constructor(private readonly logger: Console = console) {
+  public constructor(private readonly logger: Console = stdioSafeLogger) {
     this.cacheManager = new CacheManager();
     this.rateLimiter = new RateLimiter(333);
     this.parser = new XMLParser({

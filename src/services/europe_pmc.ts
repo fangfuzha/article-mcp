@@ -1,6 +1,7 @@
 import { CacheManager, RateLimiter } from "../middleware/index.js";
 import type { ArticleDetailsResult, ArticleInfo, ArticleSearchResult } from "../types/articles.js";
 import { defaultApiClient } from "../utils/api_utils.js";
+import { stdioSafeLogger } from "../utils/stdio_safe_logger.js";
 
 type SearchResult = ArticleSearchResult & { total_count: number };
 
@@ -19,7 +20,7 @@ export class EuropePMCService {
   private rateLimiter: RateLimiter;
 
   constructor(
-    private logger: Console = console,
+    private logger: Console = stdioSafeLogger,
     private pubmedService?: any,
   ) {
     this.cacheManager = new CacheManager();

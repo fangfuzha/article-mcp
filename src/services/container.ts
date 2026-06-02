@@ -6,11 +6,7 @@ import { createOpenAlexMetricsService } from "./openalex_metrics_service.js";
 import { OpenAlexService } from "./openalex_service.js";
 import { PubMedService } from "./pubmed_search.js";
 import { UnifiedReferenceService } from "./reference_service.js";
-
-const stdioSafeLogger = Object.assign(Object.create(console), {
-  log: console.error.bind(console),
-  info: console.error.bind(console),
-}) as Console;
+import { stdioSafeLogger } from "../utils/stdio_safe_logger.js";
 
 export type ArticleMcpServices = {
   europePmc: EuropePMCService;
