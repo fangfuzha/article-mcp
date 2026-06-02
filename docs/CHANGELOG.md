@@ -2,7 +2,7 @@
 
 本文档记录 Article MCP Node 迁移版的主要变更。
 
-## 0.2.5 - 2026-06-02
+## 0.2.6 - 2026-06-03
 
 ### 变更
 
@@ -11,10 +11,17 @@
 - 新增 `article://relations/{identifier}{?id_type,relation_types,analysis_type,max_results,max_depth,sources}` 文献关系资源，按需重算关系分析结果。
 - 资源读取失败时返回结构化 JSON 错误，避免直接抛出裸异常。
 - MCP 合规脚本增加 `outputSchema`、资源模板和真实工具调用 `structuredContent` 检查。
+- 服务容器注入 stdio-safe logger，避免后台检索日志写入 stdout 污染 MCP 协议通道。
 
 ### 验证
 
 - `npm run test:all` 全部通过（81/81 测试，MCP 合规 100/100）。
+
+## 0.2.5 - 2026-06-02
+
+### 变更
+
+- 更新 npm 发布说明并补齐 v0.2.5 版本元数据。
 
 ## 0.2.4 - 2026-05-28
 

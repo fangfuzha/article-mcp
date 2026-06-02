@@ -44,14 +44,17 @@ export class EasyScholarService {
     sciUpTop: "cas_zone_top",
   };
 
-  constructor(timeout: number = 30) {
+  constructor(
+    timeout: number = 30,
+    private readonly logger: Pick<Console, "error" | "warn"> = console,
+  ) {
     this.timeout = timeout;
     this.apiKey = process.env.EASYSCHOLAR_SECRET_KEY;
 
     if (this.apiKey) {
-      console.log("EasyScholar API 密钥已配置");
+      this.logger.error("EasyScholar API 密钥已配置");
     } else {
-      console.warn("EASYSCHOLAR_SECRET_KEY 未设置");
+      this.logger.warn("EASYSCHOLAR_SECRET_KEY 未设置");
     }
   }
 

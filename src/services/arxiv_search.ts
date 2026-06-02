@@ -22,7 +22,7 @@ export class ArxivSearchService {
   private parser: XMLParser;
   private baseUrl = "http://export.arxiv.org/api/query?";
 
-  constructor() {
+  constructor(private readonly logger: Pick<Console, "error" | "warn" | "info"> = console) {
     this.session = this.createRetrySession();
     this.cacheManager = new CacheManager();
     this.rateLimiter = new RateLimiter(1000); // 1秒延迟
@@ -119,7 +119,7 @@ export class ArxivSearchService {
           const pubDate = parseISO(publishedStr);
           publicationDate = format(pubDate, "yyyy-MM-dd");
         } catch {
-          console.warn(`无法解析发表日期: ${publishedStr}`);
+          this.logger.warn(`无法解析发表日期: ${publishedStr}`);
         }
       }
 
@@ -145,7 +145,7 @@ export class ArxivSearchService {
         pdf_link: pdfLink || null,
       };
     } catch (error) {
-      console.warn(`处理 arXiv 条目时发生错误: ${error}`);
+      this.logger.warn(`处理 arXiv 条目时发生错误: ${error}`);
       return null;
     }
   }
@@ -240,7 +240,7 @@ export class ArxivSearchService {
             let startIndex = 0;
             const resultsPerPage = Math.min(100, max_results);
 
-            console.log(`开始搜索 arXiv: ${keyword}`);
+            this.logger.error(`开始搜索 arXiv: ${keyword}`);
 
             while (articles.length < max_results) {
               const numToFetch = Math.min(resultsPerPage, max_results - articles.length);
@@ -261,7 +261,7 @@ export class ArxivSearchService {
 
                 const contentType = String(response.headers["content-type"] || "");
                 if (!contentType.includes("application/atom+xml")) {
-                  console.error(`意外的响应内容类型: ${contentType}`);
+                  this.logger.error(`意外的响应内容类型: ${contentType}`);
                   return {
                     articles: [],
                     total_count: 0,
@@ -276,7 +276,7 @@ export class ArxivSearchService {
                 const entryArray = Array.isArray(entries) ? entries : [entries];
 
                 if (!entryArray || entryArray.length === 0) {
-                  console.info("arXiv API 返回了空结果页，停止获取");
+                  this.logger.info("arXiv API 返回了空结果页，停止获取");
                   break;
                 }
 
@@ -291,7 +291,7 @@ export class ArxivSearchService {
                 startIndex += entryArray.length;
 
                 if (entryArray.length < numToFetch) {
-                  console.info("获取到的结果数少于请求数，认为是最后一页");
+                  this.logger.info("获取到的结果数少于请求数，认为是最后一页");
                   break;
                 }
               } catch (err) {
@@ -311,7 +311,7 @@ export class ArxivSearchService {
               }
             }
 
-            console.log(`成功获取 ${articles.length} 篇 arXiv 文献`);
+            this.logger.error(`成功获取 ${articles.length} 篇 arXiv 文献`);
 
             return {
               articles,
@@ -329,7 +329,7 @@ export class ArxivSearchService {
             };
           } catch (err) {
             const error = err instanceof Error ? err : new Error(String(err));
-            console.error(`arXiv 搜索失败: ${error.message}`);
+            this.logger.error(`arXiv 搜索失败: ${error.message}`);
             return {
               articles: [],
               total_count: 0,
