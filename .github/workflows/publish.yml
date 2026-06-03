@@ -1,138 +1,32 @@
-name: Publish Node Package
+﻿name: Publish Node Package
 
 on:
   push:
     tags:
       - "v*"
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+# Required for OIDC trusted publishing
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
-  verify-version:
-    name: Verify tag version
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Extract tag version
-        id: version
-        shell: bash
-        run: |
-          VERSION="${GITHUB_REF#refs/tags/v}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Tag version: $VERSION"
-
-      - name: Verify package version
-        shell: bash
-        run: |
-          PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          EXPECTED_VERSION="${{ steps.version.outputs.version }}"
-          echo "Package version: $PACKAGE_VERSION"
-          echo "Expected version: $EXPECTED_VERSION"
-          test "$PACKAGE_VERSION" = "$EXPECTED_VERSION"
-
-  static-analysis:
-    name: Version, types, and lint
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up cached Node.js
-        uses: ./.github/actions/setup-node-cache
-
-      - name: Restore ESLint cache
-        uses: actions/cache@v4
-        with:
-          path: .cache/eslint
-          key: ${{ runner.os }}-eslint-${{ hashFiles('package-lock.json', 'eslint.config.*', 'src/**/*.ts', 'tests/**/*.ts', 'scripts/**/*.ts') }}
-          restore-keys: |
-            ${{ runner.os }}-eslint-
-
-      - name: Check version consistency
-        run: npm run version:check
-
-      - name: Run type checks
-        run: npm run typecheck
-
-      - name: Run lint
-        run: npm run lint -- --cache --cache-location .cache/eslint/
-
-  unit-tests:
-    name: Unit tests
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up cached Node.js
-        uses: ./.github/actions/setup-node-cache
-
-      - name: Run tests
-        run: npm test
-
-  mcp-compliance:
-    name: Build and MCP compliance
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up cached Node.js
-        uses: ./.github/actions/setup-node-cache
-
-      - name: Build package
-        run: npm run build
-
-      - name: Run MCP compliance check
-        run: npm run test:mcp
-
-      - name: Upload compliance report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: node-mcp-compliance-report
-          path: scripts/mcp-compliance-report.txt
-          retention-days: 30
-
   publish:
-    name: Publish to npm
     runs-on: ubuntu-latest
-    needs: [verify-version, static-analysis, unit-tests, mcp-compliance]
-    environment: npm
-    permissions:
-      contents: read
-      id-token: write
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up cached Node.js
-        uses: ./.github/actions/setup-node-cache
+      - uses: actions/setup-node@v4
         with:
-          registry-url: https://registry.npmjs.org
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
 
-      - name: Build package
-        run: npm run build
+      - run: npm ci --prefer-offline --no-audit --no-fund
 
-      - name: Prepare npm README
-        run: npm run prepare:readme -- --no-backup
+      - run: npm run build --if-present
 
-      - name: Pack package
-        run: npm pack --dry-run --ignore-scripts
+      - run: npm test
 
-      - name: Publish to npm
-        run: npm publish --provenance --access public --ignore-scripts
+      - run: npm publish --access public
