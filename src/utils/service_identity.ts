@@ -2,7 +2,7 @@
  * 提供各学术 API 的可选身份认证参数构建辅助函数（NCBI、OpenAlex、Crossref、Semantic Scholar）。
  */
 
-const DEFAULT_TOOL_NAME = "Article-MCP";
+const DEFAULT_TOOL_NAME = "article-mcp";
 
 function trimmedEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();

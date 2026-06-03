@@ -116,7 +116,7 @@ describe("external API contract alignment", () => {
 
     const firstCall = getTextSpy.mock.calls[0]!;
     expect(firstCall[1]).toMatchObject({
-      tool: "Article-MCP",
+      tool: "article-mcp",
       db: "pubmed",
       term: '"10.5555/example.doi"[AID]',
       retmax: "1",
@@ -222,7 +222,7 @@ describe("external API contract alignment", () => {
     const firstCall = getTextSpy.mock.calls[0]!;
     expect(firstCall[0]).toContain("/efetch.fcgi");
     expect(firstCall[1]).toMatchObject({
-      tool: "Article-MCP",
+      tool: "article-mcp",
       db: "pubmed",
       id: "123456",
       retmode: "xml",
@@ -264,7 +264,7 @@ describe("external API contract alignment", () => {
     const secondCall = getTextSpy.mock.calls[1]!;
     expect(firstCall[0]).toContain("/esearch.fcgi");
     expect(firstCall[1]).toMatchObject({
-      tool: "Article-MCP",
+      tool: "article-mcp",
       db: "pubmed",
       term: "PMC1234567[PMCID]",
       retmax: "1",
@@ -272,7 +272,7 @@ describe("external API contract alignment", () => {
     });
     expect(secondCall[0]).toContain("/efetch.fcgi");
     expect(secondCall[1]).toMatchObject({
-      tool: "Article-MCP",
+      tool: "article-mcp",
       db: "pubmed",
       id: "123456",
       retmode: "xml",
@@ -321,7 +321,7 @@ describe("external API contract alignment", () => {
     const efetchCall = getTextSpy.mock.calls[1]!;
     expect(elinkCall[0]).toContain("/elink.fcgi");
     expect(elinkCall[1]).toMatchObject({
-      tool: "Article-MCP",
+      tool: "article-mcp",
       dbfrom: "pubmed",
       db: "pubmed",
       id: "123456",
@@ -330,7 +330,7 @@ describe("external API contract alignment", () => {
     });
     expect(efetchCall[0]).toContain("/efetch.fcgi");
     expect(efetchCall[1]).toMatchObject({
-      tool: "Article-MCP",
+      tool: "article-mcp",
       db: "pubmed",
       id: "234567",
       retmode: "xml",
@@ -633,7 +633,7 @@ describe("external API contract alignment", () => {
     } as unknown as Console);
     await pubmed.findPmidByDoiAsync("10.5555/identity");
     expect(getTextSpy.mock.calls[0]![1]).toMatchObject({
-      tool: "Article-MCP",
+      tool: "article-mcp",
       email: "maintainer@example.org",
       api_key: "ncbi-test-key",
     });
