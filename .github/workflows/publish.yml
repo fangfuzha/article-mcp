@@ -5,7 +5,6 @@ on:
     tags:
       - "v*"
 
-# Required for OIDC trusted publishing
 permissions:
   id-token: write
   contents: read
@@ -13,7 +12,6 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: npm
 
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +19,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          registry-url: "https://registry.npmjs.org"
 
       - run: npm ci --prefer-offline --no-audit --no-fund
 
