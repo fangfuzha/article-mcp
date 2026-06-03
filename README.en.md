@@ -1,103 +1,42 @@
-# Article MCP Literature Search Server
+# Article MCP
 
 [中文](README.md) | [English](README.en.md)
 
-> A Node.js + TypeScript migration of Article MCP.
->
-> **Acknowledgement to the Original Project**
->
-> This project is a migration of the Python implementation from [gqy20/article-mcp](https://github.com/gqy20/article-mcp). The original project is built with FastMCP. This version keeps the core architecture and adapts it to the Node.js + TypeScript ecosystem.
+[![npm version](https://img.shields.io/npm/v/article-mcp.svg)](https://www.npmjs.com/package/article-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Article MCP provides multi-source literature retrieval over the MCP protocol for Claude Desktop, Cherry Studio, and other compatible clients. It integrates Europe PMC, PubMed, arXiv, CrossRef, OpenAlex, and EasyScholar.
+A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server for academic literature search. Enables LLMs to search, retrieve, and analyze scholarly articles across multiple data sources.
 
-## Migration Status
+> Node.js + TypeScript migration from the original [Python implementation](https://github.com/gqy20/article-mcp).
 
-The current Node version uses Python `0.2.2` as its behavior baseline. The initial migration is complete, including the stdio MCP server, 5 core tools, file-based caching, engineering scripts, CI workflows, and release configuration.
+## Use Cases
 
-The aligned behavior currently covers tool input schemas, read-only tool annotations, search caching, journal-quality caching, PMC full-text output in Markdown/XML/text, reference aggregation, literature relation network expansion, and major parameter compatibility with the Python version.
+Ideal for LLM-driven workflows that require:
 
-The release gate is `npm run test:all`, which covers version consistency checks, TypeScript type checking, ESLint, production build, Vitest, and MCP stdio compliance checks.
+- **Academic writing support** — find recent research as citation sources
+- **Literature review** — search and analyze papers across multiple scholarly databases
+- **Journal quality assessment** — evaluate impact factors, quartiles, and other metrics
+- **Citation network analysis** — build citation graphs, discover similar papers
 
-## Core Capabilities
+Integrates **6 scholarly data sources**: Europe PMC, PubMed, arXiv, CrossRef, OpenAlex, and Semantic Scholar.
 
-- Multi-source literature search
-- Full-text article retrieval
-- Reference retrieval
-- Literature relation analysis
-- Journal quality evaluation
-- Input validation based on Zod
-- MCP client integration over stdio
-- Optional `.env` support for EasyScholar, OpenAlex, NCBI, and Crossref API identification
-- Tool descriptions default to Chinese and can switch to English with `ARTICLE_MCP_LANG=en`
+> **Note**: This tool returns metadata (titles, authors, abstracts, PMCID, DOIs). Full-text retrieval is available through `get_article_details` for PMC Open Access articles only.
 
 ## Quick Start
 
-### Requirements
-
-- Node.js 18 or later
-- npm 9 or later
-
-### Install and Run
+**Requirements**: Node.js 18+
 
 ```bash
-git clone https://github.com/fangfuzha/article-mcp.git
-cd article-mcp
-npm install
-npm run build
-npm start
+# Run directly (recommended — always latest)
+npx article-mcp@latest
+
+# Or install globally
+npm install -g article-mcp
+article-mcp
 ```
-
-### Development Mode
-
-```bash
-npm run dev
-```
-
-### CLI Usage
-
-If dependencies are already installed, you can start the local CLI directly:
-
-```bash
-npm start
-```
-
-Explicit subcommands are also available:
-
-```bash
-npm start -- server
-npm start -- info
-```
-
-After publishing to npm, you can also launch it with `npx article-mcp@latest` (adding `@latest` is recommended to ensure the latest version):
-
-```bash
-npx article-mcp@latest server
-npx article-mcp@latest info
-```
-
-## Client Configuration
 
 ### Claude Desktop
 
-For local development, run `npm run build` first and then use the compiled entry:
-
-```json
-{
-  "mcpServers": {
-    "article-mcp": {
-      "command": "node",
-      "args": ["E:/path/to/article-mcp/dist/index.js"],
-      "env": {
-        "EASYSCHOLAR_SECRET_KEY": "your_key_here",
-        "ARTICLE_MCP_LANG": "en"
-      }
-    }
-  }
-}
-```
-
-After publishing to npm, you can switch to package-based startup (adding `@latest` is recommended to ensure the latest version):
-
 ```json
 {
   "mcpServers": {
@@ -113,230 +52,203 @@ After publishing to npm, you can switch to package-based startup (adding `@lates
 }
 ```
 
-### Cherry Studio
+### VS Code
+
+In `.vscode/mcp.json`:
 
 ```json
 {
-  "mcpServers": {
+  "servers": {
     "article-mcp": {
+      "type": "stdio",
       "command": "npx",
       "args": ["article-mcp@latest"],
       "env": {
-        "EASYSCHOLAR_SECRET_KEY": "your_key_here",
-        "ARTICLE_MCP_LANG": "en"
+        "EASYSCHOLAR_SECRET_KEY": "your_key_here"
       }
     }
   }
 }
 ```
 
-`EASYSCHOLAR_SECRET_KEY` is optional, but recommended for journal-quality queries if you want more complete metrics. You can obtain a key at [EasyScholar](https://www.easyscholar.cc/console/user/open).
+> **Windows**: If `npx` is not found, use `"command": "cmd"` and `"args": ["/c", "npx", "article-mcp@latest"]`.
 
-If the key is missing, invalid, or EasyScholar is temporarily unavailable, `get_journal_quality` does not fail as a whole. Instead, it automatically degrades to an OpenAlex-only mode and still returns `h_index`, `citation_rate`, `cited_by_count`, `works_count`, and `i10_index`, while explaining the downgrade reason in the `warning` field.
+## Features
 
-### Environment Variables
+| Feature | Tool | Description |
+|---------|------|-------------|
+| 🔍 **Multi-source Search** | `search_literature` | Parallel search across 5 sources, 4 strategies, auto-dedup & ranking |
+| 📄 **Full-text Retrieval** | `get_article_details` | PMC full-text via PMCID (Markdown/XML/Text), up to 20 batch |
+| 📚 **References** | `get_references` | Multi-source reference lists, DOI/title dedup, source-priority ranking |
+| 🔗 **Relation Analysis** | `get_literature_relations` | Citation networks, citing papers, similar papers, multi-depth expansion |
+| 📊 **Journal Quality** | `get_journal_quality` | Impact factor, quartile, JCI, CAS zone, h-index, dual-source fallback |
 
-| Variable                 | Description                                                                 |
-| ------------------------ | --------------------------------------------------------------------------- |
-| `EASYSCHOLAR_SECRET_KEY` | Optional EasyScholar API key for journal-quality queries.                   |
-| `OPENALEX_API_KEY`       | OpenAlex API key for authenticated Works and Sources requests.              |
-| `NCBI_EMAIL`             | Contact email sent to NCBI E-utilities requests.                            |
-| `NCBI_API_KEY`           | Optional NCBI E-utilities API key.                                          |
-| `CROSSREF_MAILTO`        | Contact email sent to Crossref REST API requests and polite User-Agent.     |
-| `ARXIV_RATE_LIMIT_MS`    | Optional arXiv API request delay override; defaults to 3000ms.              |
-| `EUROPE_PMC_RATE_LIMIT_MS` | Optional Europe PMC API request delay override; defaults to 1000ms.        |
-| `SEMANTIC_SCHOLAR_API_KEY` | Semantic Scholar Graph API key for citation lookups.                      |
-| `ARTICLE_MCP_LANG`       | Tool description language, `zh-CN` by default or `en`.                      |
+## Tools Reference
 
-### Tool Description Language
+### `search_literature` — Literature Search
 
-Tool names, parameter names, and response field names remain stable regardless of language configuration. Tool titles, descriptions, and parameter hints default to Chinese. To switch them to English, set the following in your MCP client configuration:
+Searches for articles and returns PMCID metadata. Use returned PMCID with `get_article_details` for full text.
 
-```json
-{
-  "env": {
-    "ARTICLE_MCP_LANG": "en"
-  }
-}
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `keyword` | string | *required* | Search query |
+| `search_type` | enum | `comprehensive` | Strategy: `comprehensive`, `fast`, `precise`, `preprint` |
+| `sources` | string[] | strategy-based | `europe_pmc`, `pubmed`, `arxiv`, `crossref`, `openalex` |
+| `max_results` | integer | `10` | Max results per source |
+| `use_cache` | boolean | `true` | Use 24-hour file cache |
+
+### `get_article_details` — Full-text Retrieval
+
+Fetches full-text content by PMCID. PMC Open Access articles only.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `pmcid` | string \| string[] | *required* | PMCID identifier(s), max 20 |
+| `format` | enum | `markdown` | Output format: `markdown`, `xml`, `text` |
+| `sections` | string \| string[] \| null | `null` | `null` = all sections; pass names for specific sections |
+
+### `get_references` — Reference Retrieval
+
+Gets the reference list of an article.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `identifier` | string | *required* | DOI, PMID, or PMCID |
+| `id_type` | enum | `doi` | `auto`, `doi`, `pmid`, `pmcid` |
+| `max_results` | integer | `20` | Max references to return |
+| `sources` | string[] | `["europe_pmc","crossref","pubmed"]` | Data sources |
+| `include_metadata` | boolean | `true` | Include detailed metadata |
+
+### `get_literature_relations` — Relation Analysis
+
+Analyzes reference, citing, and similar-article relationships.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `identifiers` | string \| string[] | `null` | DOI, PMID, or PMCID |
+| `id_type` | enum | `auto` | Identifier type |
+| `relation_types` | enum[] | `["references","similar","citing"]` | Relation types |
+| `max_results` | integer | `20` | Max results per relation type |
+| `analysis_type` | enum | `basic` | `basic`, `comprehensive`, `network` |
+| `max_depth` | integer | `1` | Network expansion depth |
+
+### `get_journal_quality` — Journal Quality
+
+Dual data source: EasyScholar + OpenAlex with automatic fallback.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `journal_name` | string \| string[] | *required* | Journal name(s) |
+| `include_metrics` | string \| string[] \| null | `null` | Metrics to return (auto-detect when null) |
+| `sort_by` | enum \| null | `null` | Sort field for batch: `impact_factor`, `quartile`, `jci` |
+| `sort_order` | enum | `desc` | `desc` or `asc` |
+| `use_cache` | boolean | `true` | Use 24-hour file cache |
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `EASYSCHOLAR_SECRET_KEY` | For journal eval | [EasyScholar API key](https://www.easyscholar.cc/console/user/open) |
+| `OPENALEX_API_KEY` | Optional | OpenAlex authentication for higher rate limits |
+| `NCBI_EMAIL` | Recommended | NCBI E-utilities contact email |
+| `NCBI_API_KEY` | Optional | NCBI API key (raises limit to 10 req/s) |
+| `CROSSREF_MAILTO` | Recommended | Crossref Polite Pool contact email |
+| `SEMANTIC_SCHOLAR_API_KEY` | Recommended | Semantic Scholar API key |
+| `ARXIV_RATE_LIMIT_MS` | Optional | arXiv request delay override (default 3000ms) |
+| `EUROPE_PMC_RATE_LIMIT_MS` | Optional | Europe PMC request delay override (default 1000ms) |
+| `ARTICLE_MCP_LANG` | Optional | Tool description language: `zh-CN` (default) or `en` |
+
+## Usage Examples
+
+### Basic Search → Full-text Flow
+
+```
+User: Search for recent CRISPR gene editing papers
+LLM:  → search_literature(keyword="CRISPR gene editing", search_type="fast")
+      ← 10 results with metadata (title, authors, PMCID, abstract, etc.)
+
+User: Get the full text of the first paper
+LLM:  → get_article_details(pmcid="PMC1234567")
+      ← Full text in Markdown format
 ```
 
-Supported values are `zh-CN` (default) and `en`. After switching, you usually need to restart the MCP server or reconnect the client because some clients cache `tools/list`.
+### Journal Evaluation
 
-## Tool Overview
+```
+User: What's Nature's impact factor?
+LLM:  → get_journal_quality(journal_name="Nature")
+      ← impact_factor, quartile, jci, plus OpenAlex metrics
+```
 
-The current version exposes 5 read-only tools:
+### Batch Journal Comparison
 
-| Tool                       | Purpose                                                                                                                                                  | Main Parameters                                                                                                   |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `search_literature`        | Multi-source literature search                                                                                                                           | `keyword`, `sources`, `max_results`, `search_type`, `use_cache`                                                   |
-| `get_article_details`      | Full-text article retrieval with direct tool output                                                                                                      | `pmcid`, `sections`, `format`                                                                                     |
-| `get_references`           | Reference retrieval                                                                                                                                      | `identifier`, `id_type`, `sources`, `max_results`, `include_metadata`                                             |
-| `get_literature_relations` | Literature relation analysis with direct tool output                                                                                                     | `identifier` / `identifiers`, `id_type`, `relation_types`, `max_results`, `sources`, `analysis_type`, `max_depth` |
-| `get_journal_quality`      | Journal quality evaluation with automatic OpenAlex-only fallback when EasyScholar is unavailable                                                         | `journal_name`, `include_metrics`, `use_cache`, `sort_by`, `sort_order`                                           |
+```
+User: Compare Nature, Science, and Cell quality metrics
+LLM:  → get_journal_quality(
+          journal_name=["Nature", "Science", "Cell"],
+          sort_by="impact_factor"
+        )
+      ← Three journals sorted by impact factor (descending)
+```
+
+### Citation Network Analysis
+
+```
+User: Show me papers that cite DOI 10.1038/nature12373
+LLM:  → get_literature_relations(
+          identifiers="10.1038/nature12373",
+          relation_types=["citing"],
+          analysis_type="network",
+          max_depth=2
+        )
+      ← Citation network with nodes, edges, clusters, and centrality metrics
+```
+
+## Data Source Coverage
+
+| Source | Search | Details | Full-text | References | Citing | Similar |
+|--------|:------:|:-------:|:---------:|:----------:|:------:|:-------:|
+| Europe PMC | ✅ | ✅ | — | ✅ | ✅ | — |
+| PubMed | ✅ | ✅ | ✅ | ✅ | — | ✅ |
+| arXiv | ✅ | — | — | — | — | — |
+| Crossref | ✅ | ✅ | — | ✅ | — | — |
+| OpenAlex | ✅ | ✅ | — | — | ✅ | — |
+| Semantic Scholar | — | — | — | — | ✅ | — |
 
 ## Output Contract
 
-Tool calls now return both machine-readable `structuredContent` and human/LLM-facing `content`.
+- `structuredContent` uses a unified `{ success, data, meta, warnings, error }` envelope
+- `content` first block: human-readable summary and key excerpts
+- `content` second block: **serialized JSON** backup for older MCP clients
+- Server is **Tools-only** — no Resources or Prompts registered, for maximum client compatibility
 
-- `structuredContent` uses a unified `{ success, data, meta, warnings, error }` envelope.
-- The first `content` text block holds summaries and key excerpts; later text blocks include the same structured envelope as serialized JSON for older MCP clients.
-- `get_article_details` returns full-text previews, format metadata, section matching, and truncation metadata directly in the tool result.
-- `get_literature_relations` returns references, similar articles, citing articles, and optional network analysis directly in the tool result.
-- The server intentionally exposes tools only; MCP Resources and Prompts are not registered for broader agent compatibility.
+## Caching
 
-## Cache Notes
+Both search and journal-quality caches are stored under `~/.article_mcp_cache/`:
+- **Search cache**: SHA256-based keys, 24-hour TTL, atomic write (`.tmp` → rename)
+- **Journal-quality cache**: Shared JSON file with file-level concurrency protection
 
-Both search cache and journal-quality cache are stored under `~/.article_mcp_cache/`. Search cache uses SHA256-based keys with a 24-hour TTL. Journal-quality cache uses a shared file cache with file-level concurrency protection and is used by the `get_journal_quality` tool.
+## Debugging
 
-## Data Sources
+Use the MCP Inspector to test and debug tool invocations:
 
-### Europe PMC
-
-- Content: biomedical full text, abstracts, and references
-- Rate limit: about 1 req/s
-- Usage: search, full-text retrieval, and reference lookup
-
-### PubMed
-
-- Content: biomedical abstracts and supplemental metadata
-- Rate limit: no strict limit
-- Usage: search enrichment and result validation
-
-### arXiv
-
-- Content: preprint metadata
-- Rate limit: controlled according to API guidance
-- Usage: preprint search
-
-### CrossRef
-
-- Content: cross-publisher metadata and citation relationships
-- Rate limit: controlled according to the official API policy
-- Usage: reference lookup and DOI relationship queries
-
-### OpenAlex
-
-- Content: open scholarly graph, authors, journals, and citation networks
-- Rate limit: generally permissive
-- Usage: citation relations, h-index metrics, and article network analysis
-
-### EasyScholar
-
-- Content: journal quartiles and quality metrics
-- Rate limit: recommended to use with a configured key
-- Usage: impact factor, quartile, JCI, and related journal evaluation metrics
-
-## Parameter Compatibility
-
-The migration keeps strong parameter compatibility so that different MCP clients can call the tools directly:
-
-- `get_article_details.pmcid` supports a single value or a list
-- `get_article_details.sections` supports a single value, a list, or null
-- `get_article_details` full-text output is returned directly by the tool
-- `get_literature_relations` supports both `identifier` and `identifiers`
-- `get_journal_quality.journal_name` and `get_journal_quality.include_metrics` support single values or lists
-
-## Examples
-
-### Search Literature
-
-```json
-{
-  "keyword": "machine learning",
-  "max_results": 10,
-  "search_type": "comprehensive"
-}
+```bash
+npx @modelcontextprotocol/inspector node dist/index.js
 ```
 
-### Search Specific Sources
+All logging goes to **stderr** to keep stdout clean for MCP protocol communication. Check client logs for request timing and status.
 
-```json
-{
-  "keyword": "cancer",
-  "sources": ["europe_pmc", "arxiv"]
-}
-```
+## Development
 
-### Fetch Full Text
-
-```json
-{
-  "pmcid": "PMC1234567",
-  "format": "markdown"
-}
-```
-
-### Fetch Selected Sections Only
-
-```json
-{
-  "pmcid": "PMC1234567",
-  "sections": ["methods", "results"]
-}
-```
-
-### Get References
-
-```json
-{
-  "identifier": "10.1038/nature12373",
-  "id_type": "doi",
-  "max_results": 20
-}
-```
-
-### Analyze Literature Relations
-
-```json
-{
-  "identifiers": "10.1038/nature12373",
-  "relation_types": ["references", "similar"]
-}
-```
-
-### Evaluate Journal Quality
-
-```json
-{
-  "journal_name": "Nature",
-  "include_metrics": ["impact_factor", "quartile", "jci"]
-}
-```
-
-Without a valid `EASYSCHOLAR_SECRET_KEY`, this tool degrades to OpenAlex-only mode. In that case, the response includes OpenAlex metrics and explains the EasyScholar failure reason in the `warning` field.
-
-## Development Notes
-
-- Build: `npm run build`
-- Dev: `npm run dev`
-- Run: `npm start`
-- Type check: `npm run typecheck`
-- Lint: `npm run lint`
-- Format check: `npm run format:check`
-- Unit and integration tests: `npm test`
-- MCP compliance check: `npm run test:mcp`
-- Full pre-release check: `npm run test:all`
-- Version consistency check: `npm run version:check`
-- CLI: `npx article-mcp`
-
-Engineering support files mirror the Python project with Node equivalents: `.github/workflows/node-mcp-compliance.yml` handles CI compliance checks, `.github/workflows/publish.yml` handles npm publishing from tags, `scripts/sync-version.ts` handles version synchronization, and `scripts/test-mcp-compliance.ts` performs stdio MCP compliance checks.
-
-The project uses `@modelcontextprotocol/sdk`, `zod`, `axios`, `axios-retry`, `fast-xml-parser`, and `dotenv` as core dependencies.
-
-## Project Structure
-
-```text
-src/
-  index.ts              # MCP server entry
-  middleware/           # Error boundaries, logging, timing, and search cache
-  services/             # External data source and aggregation services
-  tools/                # Tool definitions, schemas, registration, and handlers
-  types/                # Shared literature and journal data models
-scripts/                # Version sync and MCP compliance scripts
-tests/                  # Vitest regression tests
-reference/article-mcp/  # Reference implementation from the original Python project
+```bash
+npm install          # Install dependencies
+npm run dev          # Development mode (tsx watch)
+npm run build        # Production build (tsup)
+npm test             # Run 91 Vitest tests
+npm run test:mcp     # MCP compliance check (target: 100/100)
+npm run test:all     # Full gate: version-check → typecheck → lint → build → test → test:mcp
 ```
 
 ## License
 
-MIT License
+MIT © [fangfuzha](https://github.com/fangfuzha)
