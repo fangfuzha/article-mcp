@@ -94,29 +94,48 @@ export class OpenAlexService {
       cacheKey,
       async () => {
         try {
-          const perPage = Math.min(maxResults, 200);
-          const url = `${this.baseUrl}/works`;
-          const params: JsonRecord = addOpenAlexAuthParams({
-            search: query,
-            per_page: perPage,
-            select: OPENALEX_WORK_SELECT,
-          });
+          const allArticles: JsonRecord[] = [];
+          let totalCount = 0;
+          let page = 1;
+          const perPage = 200;
 
-          if (filters) {
-            Object.assign(params, filters);
+          while (allArticles.length < maxResults) {
+            const remaining = maxResults - allArticles.length;
+            const pageSize = Math.min(perPage, remaining);
+            const url = `${this.baseUrl}/works`;
+            const params: JsonRecord = addOpenAlexAuthParams({
+              search: query,
+              per_page: pageSize,
+              page,
+              select: OPENALEX_WORK_SELECT,
+            });
+
+            if (filters) {
+              Object.assign(params, filters);
+            }
+
+            const headers = {
+              "User-Agent": this.userAgent,
+              Accept: "application/json",
+            };
+
+            const data = await defaultApiClient.get(url, params, headers);
+            const results = data.results || [];
+            totalCount = data.meta?.count || 0;
+
+            if (!results.length) break;
+
+            allArticles.push(...this.formatArticles(results));
+
+            // 如果结果不足一页说明已经是最后一页
+            if (results.length < perPage) break;
+            page++;
           }
-
-          const headers = {
-            "User-Agent": this.userAgent,
-            Accept: "application/json",
-          };
-
-          const data = await defaultApiClient.get(url, params, headers);
 
           return {
             success: true,
-            articles: this.formatArticles(data.results || []),
-            total_count: data.meta?.count || 0,
+            articles: allArticles.slice(0, maxResults),
+            total_count: totalCount,
             source: "openalex",
           };
         } catch (error) {
@@ -174,55 +193,85 @@ export class OpenAlexService {
   }
 
   /**
-   * 异步获取引用文献
+   * 异步获取引用文献（自动分页，支持缓存）。
    */
-  async getCitationsAsync(doi: string, maxResults: number = 20): Promise<CitationsResponse> {
-    try {
-      const openalex_id = await this.findOpenAlexIdByDoiAsync(doi);
-      if (!openalex_id) {
-        this.logger.warn(`无法找到DOI ${doi} 对应的OpenAlex ID`);
-        return {
-          success: false,
-          citations: [],
-          total_count: 0,
-          source: "openalex",
-          error: `无法找到DOI ${doi} 对应的OpenAlex ID`,
-        };
-      }
+  async getCitationsAsync(
+    doi: string,
+    maxResults: number = 20,
+    useCache: boolean = false,
+  ): Promise<CitationsResponse> {
+    const cacheKey = `openalex_citations_${doi}_${maxResults}`;
 
-      const perPage = Math.min(maxResults, 200);
-      const url = `${this.baseUrl}/works`;
-      const params = addOpenAlexAuthParams({
-        filter: `cites:W${openalex_id}`,
-        per_page: perPage,
-        select: OPENALEX_WORK_SELECT,
-      });
+    return this.cacheManager.getCachedOrFetch<CitationsResponse>(
+      cacheKey,
+      async () => {
+        try {
+          const openalex_id = await this.findOpenAlexIdByDoiAsync(doi);
+          if (!openalex_id) {
+            this.logger.warn(`无法找到DOI ${doi} 对应的OpenAlex ID`);
+            return {
+              success: false,
+              citations: [],
+              total_count: 0,
+              source: "openalex",
+              error: `无法找到DOI ${doi} 对应的OpenAlex ID`,
+            };
+          }
 
-      const headers = {
-        "User-Agent": this.userAgent,
-        Accept: "application/json",
-      };
+          const allCitations: JsonRecord[] = [];
+          let totalCount = 0;
+          let page = 1;
+          const perPage = 200;
 
-      const data = await defaultApiClient.get(url, params, headers);
-      const citations = data.results || [];
+          while (allCitations.length < maxResults) {
+            const remaining = maxResults - allCitations.length;
+            const pageSize = Math.min(perPage, remaining);
+            const url = `${this.baseUrl}/works`;
+            const params = addOpenAlexAuthParams({
+              filter: `cites:W${openalex_id}`,
+              per_page: pageSize,
+              page,
+              select: OPENALEX_WORK_SELECT,
+            });
 
-      return {
-        success: true,
-        citations: this.formatArticles(citations),
-        total_count: data.meta?.count || citations.length,
-        source: "openalex",
-        openalex_id,
-      };
-    } catch (error) {
-      this.logger.error(`OpenAlex获取引用文献失败: ${error}`);
-      return {
-        success: false,
-        citations: [],
-        total_count: 0,
-        source: "openalex",
-        error: String(error),
-      };
-    }
+            const headers = {
+              "User-Agent": this.userAgent,
+              Accept: "application/json",
+            };
+
+            const data = await defaultApiClient.get(url, params, headers);
+            const results = data.results || [];
+            totalCount = data.meta?.count || 0;
+
+            if (!results.length) break;
+
+            allCitations.push(...this.formatArticles(results));
+
+            if (results.length < perPage) break;
+            page++;
+          }
+
+          return {
+            success: true,
+            citations: allCitations.slice(0, maxResults),
+            total_count: totalCount,
+            source: "openalex",
+            openalex_id,
+          };
+        } catch (error) {
+          this.logger.error(`OpenAlex获取引用文献失败: ${error}`);
+          return {
+            success: false,
+            citations: [],
+            total_count: 0,
+            source: "openalex",
+            error: String(error),
+          };
+        }
+      },
+      24,
+      useCache,
+    );
   }
 
   /**

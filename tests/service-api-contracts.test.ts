@@ -158,6 +158,9 @@ describe("external API contract alignment", () => {
               DOI: "10.5555/semantic-citing",
             },
           },
+          contexts: ["This paper builds on the work of Lovelace et al."],
+          intents: ["background"],
+          isInfluential: true,
         },
       ],
     });
@@ -174,7 +177,7 @@ describe("external API contract alignment", () => {
     expect(firstCall[0]).toBe("https://api.semanticscholar.org/graph/v1/paper/PMID:123456/citations");
     expect(firstCall[1]).toMatchObject({
       fields:
-        "citingPaper.paperId,citingPaper.title,citingPaper.year,citingPaper.authors,citingPaper.venue,citingPaper.externalIds,citingPaper.publicationDate",
+        "contexts,intents,isInfluential,citingPaper.paperId,citingPaper.title,citingPaper.year,citingPaper.authors,citingPaper.venue,citingPaper.externalIds,citingPaper.publicationDate",
       limit: 5,
     });
     expect(firstCall[2]).toMatchObject({
@@ -188,6 +191,9 @@ describe("external API contract alignment", () => {
       publication_date: "2024-02-03",
       doi: "10.5555/semantic-citing",
       semantic_scholar_id: "ss-paper-1",
+      citation_contexts: ["This paper builds on the work of Lovelace et al."],
+      citation_intents: ["background"],
+      is_influential_citation: true,
     });
   });
 

@@ -2,7 +2,7 @@
  * 管理持久化搜索缓存的读写、命中判断和过期清理。
  */
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -90,7 +90,7 @@ export class SearchCache {
   }
 
   /**
-   * 保存结果到缓存。
+   * 保存结果到缓存（原子写入：先写临时文件再 rename，防止并发读损坏）。
    *
    * @param cacheKey 缓存键。
    * @param result 要缓存的结果对象。
@@ -105,7 +105,11 @@ export class SearchCache {
     };
 
     await mkdir(this.resolveCacheDir(cacheKey), { recursive: true });
-    await writeFile(cachePath, JSON.stringify(cacheData, null, 2), { encoding: "utf-8" });
+
+    // 原子写入：先写 .tmp 文件，再 rename 到目标路径
+    const tmpPath = `${cachePath}.tmp`;
+    await writeFile(tmpPath, JSON.stringify(cacheData, null, 2), { encoding: "utf-8" });
+    await rename(tmpPath, cachePath);
   }
 
   /**

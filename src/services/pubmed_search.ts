@@ -182,7 +182,7 @@ export class PubMedService {
       const ssUrl = `https://api.semanticscholar.org/graph/v1/paper/PMID:${pmid}/citations`;
       const ssParams = {
         fields:
-          "citingPaper.paperId,citingPaper.title,citingPaper.year,citingPaper.authors,citingPaper.venue,citingPaper.externalIds,citingPaper.publicationDate",
+          "contexts,intents,isInfluential,citingPaper.paperId,citingPaper.title,citingPaper.year,citingPaper.authors,citingPaper.venue,citingPaper.externalIds,citingPaper.publicationDate",
         limit: maxResults,
       };
 
@@ -222,6 +222,11 @@ export class PubMedService {
         const arxivLink = arxivId ? `https://arxiv.org/abs/${arxivId}` : undefined;
         const ssLink = ssPaperId ? `https://www.semanticscholar.org/paper/${ssPaperId}` : undefined;
 
+        // 引用上下文（Semantic Scholar 特有字段）
+        const citationContexts = Array.isArray(item.contexts) ? item.contexts : [];
+        const citationIntents = Array.isArray(item.intents) ? item.intents : [];
+        const citationInfluential = Boolean(item.isInfluential);
+
         interimArticles.push({
           pmid: null,
           title: paper.title || "No title",
@@ -238,6 +243,9 @@ export class PubMedService {
           ...(doiLink || arxivLink || ssLink
             ? { pmid_link: (doiLink || arxivLink || ssLink) as string }
             : {}),
+          ...(citationContexts.length ? { citation_contexts: citationContexts } : {}),
+          ...(citationIntents.length ? { citation_intents: citationIntents } : {}),
+          ...(citationInfluential ? { is_influential_citation: true } : {}),
         });
       }
 

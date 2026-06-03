@@ -387,6 +387,74 @@ export class EuropePMCService {
   }
 
   /**
+   * 通过 Europe PMC citations endpoint 获取施引文献。
+   *
+   * @param identifier DOI、PMID 或 PMCID。
+   * @param idType 标识符类型，auto 时根据标识符格式推断。
+   * @param maxResults 最大返回施引文献数量。
+   * @returns 施引文献查询结果。
+   */
+  async getCitationsAsync(
+    identifier: string,
+    idType: string = "auto",
+    maxResults: number = 20,
+  ): Promise<Record<string, any>> {
+    const cacheKey = `europe_pmc_citations_${idType}_${identifier}_${maxResults}`;
+
+    return this.cacheManager.getCachedOrFetch(
+      cacheKey,
+      async () => {
+        try {
+          const target = await this.resolveReferenceTarget(identifier, idType);
+          if (!target) {
+            return {
+              success: false,
+              citations: [],
+              total_count: 0,
+              source: "europe_pmc",
+              error: `无法解析 Europe PMC citations 标识符: ${identifier}`,
+            };
+          }
+
+          const url = `${this.referenceRootUrl}/${target.source}/${encodeURIComponent(target.id)}/citations`;
+          const params = {
+            format: "json",
+            pageSize: maxResults,
+          };
+
+          const data = await this.europePmcGet<any>(url, params, 60000);
+          const rawCitations = data?.citationList?.citation || [];
+          const citations = rawCitations
+            .slice(0, maxResults)
+            .map((citationJson: any) => this.formatReferenceRecord(citationJson));
+
+          return {
+            success: true,
+            citations,
+            total_count: Number(data?.hitCount ?? citations.length),
+            source: "europe_pmc",
+            resolved_target: target,
+            message: citations.length
+              ? `Europe PMC 返回 ${citations.length} 条施引文献`
+              : "Europe PMC 未返回施引文献",
+          };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          this.logger.error(`Europe PMC 获取施引文献失败: ${errorMessage}`);
+          return {
+            success: false,
+            citations: [],
+            total_count: 0,
+            source: "europe_pmc",
+            error: errorMessage,
+          };
+        }
+      },
+      24,
+    );
+  }
+
+  /**
    * 构建查询参数
    */
   private buildQueryParams(
