@@ -6,10 +6,9 @@
 
 ### 变更
 
-- 工具输出改为统一的 `structuredContent` 包装，`content` 仅保留摘要和关键摘录。
-- 新增 `article://fulltext/{pmcid}?format={format}&sections={sections}` 全文资源，按需重取完整内容。
-- 新增 `article://relations/{identifier}{?id_type,relation_types,analysis_type,max_results,max_depth,sources}` 文献关系资源，按需重算关系分析结果。
-- 资源读取失败时返回结构化 JSON 错误，避免直接抛出裸异常。
+- 工具输出改为统一的 `structuredContent` 包装，`content` 首段保留摘要和关键摘录，并附带结构化 JSON 备份以兼容旧客户端。
+- 服务器保持 Tools-only 形态，不注册 MCP Resources 或 Prompts，以提升客户端兼容性。
+- 全文和文献关系结果均通过 tool 的结构化结果直接返回。
 - MCP 合规脚本增加 `outputSchema`、资源模板和真实工具调用 `structuredContent` 检查。
 - 服务容器注入 stdio-safe logger，避免后台检索日志写入 stdout 污染 MCP 协议通道。
 - 默认服务构造器和导出单例复用 stdio-safe logger，并增加回归测试覆盖。

@@ -4,7 +4,7 @@
 
 Python 到 Node 的**基础迁移已经完成**。当前 Node 版已经具备可运行的 MCP stdio 服务、5 个核心工具、工程化脚本、测试和发布配置，可以作为 Python 版的可用替代实现。
 
-当前 Node 版已通过 `format:check`、`version:check`、`typecheck`、`lint`、`build`、`vitest` 和 `test:mcp`，当前测试为 `82/82` 通过，MCP 合规检查分数为 `100/100`。入口、工具层、资源层、服务层和工程化配套均已落地。
+当前 Node 版已通过 `format:check`、`version:check`、`typecheck`、`lint`、`build`、`vitest` 和 `test:mcp`，MCP 合规检查分数为 `100/100`。入口、工具层、服务层和工程化配套均已落地；当前服务器保持 Tools-only 形态，不注册 MCP Resources 或 Prompts。
 
 当前已找不到明确的 P0/P1 行为缺口；后续工作主要是持续回归补测、外部 API 兼容性观察和按实际用户反馈进行小步优化。
 
@@ -29,7 +29,7 @@ Python 到 Node 的**基础迁移已经完成**。当前 Node 版已经具备可
 
 **对齐目标：** `ToolExecutionPipeline` 应先注册 TimingMiddleware，再通过 createLoggingMiddleware 记录请求日志，最后用 ErrorBoundaryMiddleware 兜底异常。每个工具结果应自动包含 `processing_time` 和 `timestamp`。
 
-- [x] 补齐 `createTimingMiddleware`——在工具结果（`CallToolResult`）的 `content[0].text` JSON 对象中注入 `processing_time` 和 `timestamp`。
+- [x] 补齐 `createTimingMiddleware`——在工具结果（`CallToolResult`）的 JSON 文本内容中注入 timing；结构化 envelope 写入 `meta.processing_time_ms` 和 `meta.timestamp`。
 - [x] 补齐 `createLoggingMiddleware`——使用 `console.error`（stderr）记录请求方法、耗时和状态。
 - [x] 验证：每个工具响应包含 `processing_time` 和 `timestamp`；stderr 有请求日志。
 

@@ -4,6 +4,7 @@
 import { CacheManager, RateLimiter } from "../middleware/index.js";
 import type { ArticleDetailsResult, ArticleInfo, ArticleSearchResult } from "../types/articles.js";
 import { defaultApiClient } from "../utils/api_utils.js";
+import { normalizeDoiIdentifier } from "../utils/service_identity.js";
 import { stdioSafeLogger } from "../utils/stdio_safe_logger.js";
 
 type SearchResult = ArticleSearchResult & { total_count: number };
@@ -27,7 +28,26 @@ export class EuropePMCService {
     private pubmedService?: any,
   ) {
     this.cacheManager = new CacheManager();
-    this.rateLimiter = new RateLimiter(this.rateLimitDelay);
+    this.rateLimiter = new RateLimiter(this.resolveRateLimitDelayMs());
+  }
+
+  private resolveRateLimitDelayMs(): number {
+    const configured = Number(process.env.EUROPE_PMC_RATE_LIMIT_MS);
+    if (Number.isFinite(configured) && configured >= 0) {
+      return configured;
+    }
+
+    return process.env.NODE_ENV === "test" ? 0 : this.rateLimitDelay;
+  }
+
+  private async europePmcGet<T = any>(
+    url: string,
+    params?: Record<string, unknown>,
+    timeout?: number,
+  ): Promise<T> {
+    return this.rateLimiter.schedule(() =>
+      defaultApiClient.get<T>(url, params, this.headers, timeout),
+    );
   }
 
   /**
@@ -109,6 +129,28 @@ export class EuropePMCService {
   }
 
   /**
+   * 从 Europe PMC 检索结果文章中解析源类型（MED 或 PMC）。
+   *
+   * @param article Europe PMC 文章 JSON 对象。
+   * @returns 与 references endpoint 兼容的源类型。
+   */
+  private resolveSourceFromArticle(article: any): string {
+    if (article.source) {
+      return String(article.source);
+    }
+
+    if (article.pmid) {
+      return "MED";
+    }
+
+    if (article.pmcid) {
+      return "PMC";
+    }
+
+    return "";
+  }
+
+  /**
    * 推断 Europe PMC references 接口可用的标识符类型。
    *
    * @param identifier 用户传入的 DOI、PMID 或 PMCID。
@@ -138,6 +180,7 @@ export class EuropePMCService {
   private stripIdentifierPrefix(identifier: string): string {
     return identifier
       .replace(/^DOI:/i, "")
+      .replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "")
       .replace(/^PMID:/i, "")
       .replace(/^PMCID:/i, "")
       .trim();
@@ -255,14 +298,14 @@ export class EuropePMCService {
       resultType: "core",
       pageSize: 1,
     };
-    const data = await defaultApiClient.get<any>(this.baseUrl, params, this.headers, 60000);
+    const data = await this.europePmcGet<any>(this.baseUrl, params, 60000);
     const article = data?.resultList?.result?.[0];
 
     if (!article) {
       return null;
     }
 
-    const source = String(article.source || (article.pmid ? "MED" : article.pmcid ? "PMC" : ""));
+    const source = this.resolveSourceFromArticle(article);
     const targetId = String(article.id || article.pmid || article.pmcid || "").trim();
 
     if (!source || !targetId) {
@@ -311,7 +354,7 @@ export class EuropePMCService {
             pageSize: maxResults,
           };
 
-          const data = await defaultApiClient.get<any>(url, params, this.headers, 60000);
+          const data = await this.europePmcGet<any>(url, params, 60000);
           const rawReferences = data?.referenceList?.reference || [];
           const references = rawReferences
             .slice(0, maxResults)
@@ -353,19 +396,21 @@ export class EuropePMCService {
     maxResults: number,
     email?: string,
   ): Record<string, any> {
-    let endDt = endDate ? this.parseDate(endDate) : new Date();
-    let startDt = startDate
-      ? this.parseDate(startDate)
-      : new Date(endDt.getTime() - 3 * 365 * 24 * 60 * 60 * 1000);
+    let fullQuery = keyword;
 
-    if (startDt > endDt) {
-      throw new Error("Start date cannot be later than end date");
+    if (startDate || endDate) {
+      const endDt = endDate ? this.parseDate(endDate) : new Date();
+      const startDt = startDate ? this.parseDate(startDate) : new Date(0);
+
+      if (startDt > endDt) {
+        throw new Error("Start date cannot be later than end date");
+      }
+
+      const startStr = startDt.toISOString().split("T")[0];
+      const endStr = endDt.toISOString().split("T")[0];
+      const dateFilter = `FIRST_PDATE:[${startStr} TO ${endStr}]`;
+      fullQuery = `(${keyword}) AND (${dateFilter})`;
     }
-
-    const startStr = startDt.toISOString().split("T")[0];
-    const endStr = endDt.toISOString().split("T")[0];
-    const dateFilter = `FIRST_PDATE:[${startStr} TO ${endStr}]`;
-    const fullQuery = `(${keyword}) AND (${dateFilter})`;
 
     const params: Record<string, any> = {
       query: fullQuery,
@@ -398,10 +443,7 @@ export class EuropePMCService {
     return this.cacheManager.getCachedOrFetch<SearchResult>(
       cacheKey,
       async () => {
-        // 限速器
-        await this.rateLimiter.schedule(async () => {
-          this.logger.info(`Starting async search: ${keyword}`);
-        });
+        this.logger.info(`Starting async search: ${keyword}`);
 
         try {
           const params = this.buildQueryParams(
@@ -412,7 +454,7 @@ export class EuropePMCService {
             email,
           );
 
-          const data = await defaultApiClient.get<any>(this.baseUrl, params, this.headers, 60000);
+          const data = await this.europePmcGet<any>(this.baseUrl, params, 60000);
 
           const results = data?.resultList?.result || [];
           const hitCount = data?.hitCount || 0;
@@ -474,23 +516,21 @@ export class EuropePMCService {
         for (let attempt = 0; attempt < maxRetries; attempt++) {
           try {
             let query = "";
+            const normalizedIdentifier = this.stripIdentifierPrefix(identifier);
             if (idType.toLowerCase() === "pmid") {
-              query = `EXT_ID:${identifier}`;
+              query = `EXT_ID:${normalizedIdentifier}`;
             } else if (idType.toLowerCase() === "pmcid") {
-              query = identifier.startsWith("PMC")
-                ? `PMCID:${identifier}`
-                : `PMCID:PMC${identifier}`;
+              query = normalizedIdentifier.startsWith("PMC")
+                ? `PMCID:${normalizedIdentifier}`
+                : `PMCID:PMC${normalizedIdentifier}`;
+            } else if (idType.toLowerCase() === "doi") {
+              query = `DOI:"${normalizedIdentifier}"`;
             } else {
-              query = `${idType.toUpperCase()}:${identifier}`;
+              query = `${idType.toUpperCase()}:${normalizedIdentifier}`;
             }
 
             const params = { query, format: "json", resultType: "core" };
-            const data = await defaultApiClient.get<any>(
-              this.detailUrl,
-              params,
-              this.headers,
-              60000,
-            );
+            const data = await this.europePmcGet<any>(this.detailUrl, params, 60000);
 
             const results = data?.resultList?.result || [];
 
@@ -521,8 +561,6 @@ export class EuropePMCService {
                 this.logger.error(`Error fetching PMC fulltext: ${e}`);
               }
             }
-
-            await this.rateLimiter.schedule(async () => {});
 
             return articleInfo
               ? { article: articleInfo }
@@ -559,7 +597,13 @@ export class EuropePMCService {
     }
 
     try {
-      const doiQueries = dois.map((doi) => `DOI:"${doi}"`);
+      const doiQueries = dois
+        .map((doi) => normalizeDoiIdentifier(doi))
+        .filter(Boolean)
+        .map((doi) => `DOI:"${doi}"`);
+      if (!doiQueries.length) {
+        return [];
+      }
       const query = doiQueries.join(" OR ");
 
       const params = {
@@ -572,7 +616,7 @@ export class EuropePMCService {
 
       this.logger.info(`Batch query ${dois.length} DOIs`);
 
-      const data = await defaultApiClient.get<any>(this.baseUrl, params, this.headers, 60000);
+      const data = await this.europePmcGet<any>(this.baseUrl, params, 60000);
       const results = data?.resultList?.result || [];
       this.logger.info(`Batch query returned ${results.length} results`);
       return results;

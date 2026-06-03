@@ -10,6 +10,7 @@ interface ApiResponse {
   msg: string;
   data?: {
     officialRank?: {
+      select?: Record<string, unknown>;
       all?: Record<string, unknown>;
     };
   };
@@ -28,6 +29,7 @@ export class EasyScholarService {
 
   private readonly FIELD_MAPPING: Record<string, string> = {
     sciif: "impact_factor",
+    sciif5: "five_year_impact_factor",
     sci: "quartile",
     jci: "jci",
     sciUp: "cas_zone",
@@ -38,13 +40,13 @@ export class EasyScholarService {
 
   constructor(
     timeout: number = 30,
-    private readonly logger: Pick<Console, "error" | "warn"> = console,
+    private readonly logger: Pick<Console, "error" | "warn"> & { info?: Console["info"] } = console,
   ) {
     this.timeout = timeout;
     this.apiKey = process.env.EASYSCHOLAR_SECRET_KEY;
 
     if (this.apiKey) {
-      this.logger.error("EasyScholar API 密钥已配置");
+      this.logger.info?.("EasyScholar API 密钥已配置");
     } else {
       this.logger.warn("EASYSCHOLAR_SECRET_KEY 未设置");
     }
@@ -182,7 +184,10 @@ export class EasyScholarService {
   private parseApiResponse(journal_name: string, api_data: ApiResponse): JournalQualityResponse {
     const data = api_data.data || {};
     const official_rank = data.officialRank || {};
-    const all_rank = official_rank.all || {};
+    const all_rank = {
+      ...(official_rank.all || {}),
+      ...(official_rank.select || {}),
+    };
 
     const quality_metrics: QualityMetrics = {};
 
@@ -190,7 +195,11 @@ export class EasyScholarService {
       if (api_field in all_rank) {
         let value: unknown = all_rank[api_field];
 
-        if (internal_field === "impact_factor" && value != null) {
+        if (
+          (internal_field === "impact_factor" ||
+            internal_field === "five_year_impact_factor") &&
+          value != null
+        ) {
           const parsed = parseFloat(String(value));
           value = Number.isNaN(parsed) ? null : parsed;
         }

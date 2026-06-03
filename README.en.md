@@ -27,7 +27,7 @@ The release gate is `npm run test:all`, which covers version consistency checks,
 - Journal quality evaluation
 - Input validation based on Zod
 - MCP client integration over stdio
-- Optional `.env` support for `EASYSCHOLAR_SECRET_KEY`
+- Optional `.env` support for EasyScholar, OpenAlex, NCBI, and Crossref API identification
 - Tool descriptions default to Chinese and can switch to English with `ARTICLE_MCP_LANG=en`
 
 ## Quick Start
@@ -134,6 +134,20 @@ After publishing to npm, you can switch to package-based startup (adding `@lates
 
 If the key is missing, invalid, or EasyScholar is temporarily unavailable, `get_journal_quality` does not fail as a whole. Instead, it automatically degrades to an OpenAlex-only mode and still returns `h_index`, `citation_rate`, `cited_by_count`, `works_count`, and `i10_index`, while explaining the downgrade reason in the `warning` field.
 
+### Environment Variables
+
+| Variable                 | Description                                                                 |
+| ------------------------ | --------------------------------------------------------------------------- |
+| `EASYSCHOLAR_SECRET_KEY` | Optional EasyScholar API key for journal-quality queries.                   |
+| `OPENALEX_API_KEY`       | OpenAlex API key for authenticated Works and Sources requests.              |
+| `NCBI_EMAIL`             | Contact email sent to NCBI E-utilities requests.                            |
+| `NCBI_API_KEY`           | Optional NCBI E-utilities API key.                                          |
+| `CROSSREF_MAILTO`        | Contact email sent to Crossref REST API requests and polite User-Agent.     |
+| `ARXIV_RATE_LIMIT_MS`    | Optional arXiv API request delay override; defaults to 3000ms.              |
+| `EUROPE_PMC_RATE_LIMIT_MS` | Optional Europe PMC API request delay override; defaults to 1000ms.        |
+| `SEMANTIC_SCHOLAR_API_KEY` | Semantic Scholar Graph API key for citation lookups.                      |
+| `ARTICLE_MCP_LANG`       | Tool description language, `zh-CN` by default or `en`.                      |
+
 ### Tool Description Language
 
 Tool names, parameter names, and response field names remain stable regardless of language configuration. Tool titles, descriptions, and parameter hints default to Chinese. To switch them to English, set the following in your MCP client configuration:
@@ -165,7 +179,7 @@ The current version exposes 5 read-only tools:
 Tool calls now return both machine-readable `structuredContent` and human/LLM-facing `content`.
 
 - `structuredContent` uses a unified `{ success, data, meta, warnings, error }` envelope.
-- `content` now holds only summaries and key excerpts, not the full JSON payload.
+- The first `content` text block holds summaries and key excerpts; later text blocks include the same structured envelope as serialized JSON for older MCP clients.
 - `get_article_details` returns full-text previews, format metadata, section matching, and truncation metadata directly in the tool result.
 - `get_literature_relations` returns references, similar articles, citing articles, and optional network analysis directly in the tool result.
 - The server intentionally exposes tools only; MCP Resources and Prompts are not registered for broader agent compatibility.

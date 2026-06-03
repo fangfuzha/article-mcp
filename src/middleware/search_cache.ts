@@ -46,10 +46,16 @@ export class SearchCache {
    * @param keyword 搜索关键词。
    * @param sources 数据源列表。
    * @param maxResults 每源最大结果数。
+   * @param searchType 搜索策略；影响合并语义，必须进入工具级缓存键。
    * @returns SHA256 哈希的前 32 位。
    */
-  public static generateKey(keyword: string, sources: string[], maxResults: number): string {
-    const keyData = `${keyword}|${[...sources].sort().join(",")}|${maxResults}`;
+  public static generateKey(
+    keyword: string,
+    sources: string[],
+    maxResults: number,
+    searchType = "comprehensive",
+  ): string {
+    const keyData = `${keyword}|${[...sources].sort().join(",")}|${maxResults}|${searchType}`;
     return createHash("sha256").update(keyData, "utf-8").digest("hex").slice(0, 32);
   }
 

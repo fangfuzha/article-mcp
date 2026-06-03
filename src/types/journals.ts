@@ -4,6 +4,7 @@
 export type QualityMetrics = {
   [key: string]: unknown;
   impact_factor?: number;
+  five_year_impact_factor?: number;
   quartile?: string;
   jci?: string;
   cas_zone?: string;

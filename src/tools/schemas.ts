@@ -96,7 +96,7 @@ export const GetReferencesInputSchema: ToolInputSchema = {
     },
     sources: {
       ...stringArraySchema,
-      default: ["europe_pmc", "crossref"],
+      default: ["europe_pmc", "crossref", "pubmed"],
       description: "数据源列表",
     },
     max_results: {
@@ -260,7 +260,7 @@ const EN_INPUT_SCHEMA_DESCRIPTIONS: Record<keyof ToolInputSchemaMap, Record<stri
   get_references: {
     identifier: "Article identifier (required): DOI, PMID, or PMCID",
     id_type: "Identifier type (default doi)",
-    sources: "Source list",
+    sources: "Source list, default Europe PMC, CrossRef, and PubMed",
     max_results: "Maximum number of references (default 20, recommended 20-100)",
     include_metadata: "Whether to include detailed metadata (default true)",
   },

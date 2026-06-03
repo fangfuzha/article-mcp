@@ -13,6 +13,11 @@ import type {
   SimilarArticlesResult,
 } from "../types/articles.js";
 import { defaultApiClient } from "../utils/api_utils.js";
+import {
+  buildNcbiParams,
+  buildSemanticScholarHeaders,
+  normalizeDoiIdentifier,
+} from "../utils/service_identity.js";
 import { stdioSafeLogger } from "../utils/stdio_safe_logger.js";
 
 type SearchResult = ArticleSearchResult;
@@ -55,7 +60,7 @@ export class PubMedService {
 
   public constructor(private readonly logger: Console = stdioSafeLogger) {
     this.cacheManager = new CacheManager();
-    this.rateLimiter = new RateLimiter(333);
+    this.rateLimiter = new RateLimiter(this.resolveRateLimitDelayMs());
     this.parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: "@_",
@@ -80,25 +85,19 @@ export class PubMedService {
       cacheKey,
       async () => {
         try {
-          if (email && !this.validateEmail(email)) {
-            email = undefined;
-          }
-
           const term = this.buildTerm(keyword, startDate, endDate);
           const esearchParams: Record<string, any> = {
+            ...buildNcbiParams(email),
             db: "pubmed",
             term,
             retmax: String(maxResults),
             retmode: "xml",
           };
-          if (email) {
-            esearchParams.email = email;
-          }
 
           this.logger.info(`PubMed async ESearch: ${term}`);
 
           const esearchUrl = `${this.baseUrl}esearch.fcgi`;
-          const esearchXmlString = await defaultApiClient.getText(
+          const esearchXmlString = await this.ncbiGetText(
             esearchUrl,
             esearchParams,
             this.headers,
@@ -117,19 +116,17 @@ export class PubMedService {
 
           const pmids = ids.slice(0, maxResults).map((id) => String(id));
           const efetchParams: Record<string, any> = {
+            ...buildNcbiParams(email),
             db: "pubmed",
             id: pmids.join(","),
             retmode: "xml",
             rettype: "xml",
           };
-          if (email) {
-            efetchParams.email = email;
-          }
 
           this.logger.info(`PubMed async EFetch ${pmids.length} articles`);
 
           const efetchUrl = `${this.baseUrl}efetch.fcgi`;
-          const efetchXmlString = await defaultApiClient.getText(
+          const efetchXmlString = await this.ncbiGetText(
             efetchUrl,
             efetchParams,
             this.headers,
@@ -182,18 +179,20 @@ export class PubMedService {
         return { citing_articles: [], error: "Invalid PMID" };
       }
 
-      if (email && !this.validateEmail(email)) {
-        email = undefined;
-      }
-
       const ssUrl = `https://api.semanticscholar.org/graph/v1/paper/PMID:${pmid}/citations`;
       const ssParams = {
-        fields: "title,year,authors,venue,externalIds,publicationDate",
+        fields:
+          "citingPaper.paperId,citingPaper.title,citingPaper.year,citingPaper.authors,citingPaper.venue,citingPaper.externalIds,citingPaper.publicationDate",
         limit: maxResults,
       };
 
       this.logger.info(`Semantic Scholar query citations: ${ssUrl}`);
-      const ssResponse = await defaultApiClient.getJson<any>(ssUrl, ssParams, undefined, 60000);
+      const ssResponse = await defaultApiClient.getJson<any>(
+        ssUrl,
+        ssParams,
+        buildSemanticScholarHeaders(),
+        60000,
+      );
       const ssItems = ssResponse?.data || [];
       if (!ssItems.length) {
         return {
@@ -245,17 +244,15 @@ export class PubMedService {
       let citingArticles: ArticleInfo[] = [];
       if (pmidList.length > 0) {
         const efetchParams: Record<string, any> = {
+          ...buildNcbiParams(email),
           db: "pubmed",
           id: pmidList.join(","),
           retmode: "xml",
           rettype: "xml",
         };
-        if (email) {
-          efetchParams.email = email;
-        }
 
         const efetchUrl = `${this.baseUrl}efetch.fcgi`;
-        const efetchXmlString = await defaultApiClient.getText(
+        const efetchXmlString = await this.ncbiGetText(
           efetchUrl,
           efetchParams,
           this.headers,
@@ -289,29 +286,105 @@ export class PubMedService {
   }
 
   /**
+   * 获取某 PMID 引用的参考文献。
+   */
+  public async getReferencedArticlesAsync(
+    pmid: string,
+    email?: string,
+    maxResults = 20,
+  ): Promise<{ referenced_articles: ArticleInfo[]; total_count?: number; error?: string; message?: string }> {
+    try {
+      if (!pmid || !/^\d+$/.test(pmid)) {
+        return { referenced_articles: [], error: "Invalid PMID" };
+      }
+
+      const elinkParams: Record<string, any> = {
+        ...buildNcbiParams(email),
+        dbfrom: "pubmed",
+        db: "pubmed",
+        id: pmid,
+        linkname: "pubmed_pubmed_refs",
+        retmode: "xml",
+      };
+
+      const elinkXmlString = await this.ncbiGetText(
+        `${this.baseUrl}elink.fcgi`,
+        elinkParams,
+        this.headers,
+        30000,
+      );
+      const elinkXml = this.parser.parse(elinkXmlString);
+      const linkSetDb = this.toArray(elinkXml.eLinkResult?.LinkSet?.LinkSetDb)[0];
+      const links = this.toArray(linkSetDb?.Link);
+      const referencedPmids = links
+        .map((link) => this.nodeText(link?.Id))
+        .filter((id) => /^\d+$/.test(id))
+        .slice(0, maxResults);
+
+      if (!referencedPmids.length) {
+        return {
+          referenced_articles: [],
+          total_count: 0,
+          message: "No referenced articles found",
+        };
+      }
+
+      const efetchParams: Record<string, any> = {
+        ...buildNcbiParams(email),
+        db: "pubmed",
+        id: referencedPmids.join(","),
+        retmode: "xml",
+        rettype: "xml",
+      };
+
+      const efetchXmlString = await this.ncbiGetText(
+        `${this.baseUrl}efetch.fcgi`,
+        efetchParams,
+        this.headers,
+        60000,
+      );
+      const efetchXml = this.parser.parse(efetchXmlString);
+      const referencedArticles: ArticleInfo[] = [];
+      for (const art of this.toArray(efetchXml.PubmedArticleSet?.PubmedArticle)) {
+        const info = this.processArticle(art);
+        if (info) {
+          referencedArticles.push(info);
+        }
+      }
+
+      return {
+        referenced_articles: referencedArticles,
+        total_count: referencedPmids.length,
+        message: `Retrieved ${referencedArticles.length} referenced articles`,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return {
+        referenced_articles: [],
+        error: `Failed to fetch referenced articles: ${errorMsg}`,
+      };
+    }
+  }
+
+  /**
    * 通过 DOI 查找 PubMed PMID。
    */
   public async findPmidByDoiAsync(doi: string, email?: string): Promise<string | null> {
     try {
-      if (!doi.trim()) {
+      const normalizedDoi = normalizeDoiIdentifier(doi);
+      if (!normalizedDoi) {
         return null;
       }
 
-      if (email && !this.validateEmail(email)) {
-        email = undefined;
-      }
-
       const params: Record<string, any> = {
+        ...buildNcbiParams(email),
         db: "pubmed",
-        term: doi.trim(),
+        term: `"${normalizedDoi}"[AID]`,
         retmax: "1",
         retmode: "xml",
       };
-      if (email) {
-        params.email = email;
-      }
 
-      const xmlString = await defaultApiClient.getText(
+      const xmlString = await this.ncbiGetText(
         `${this.baseUrl}esearch.fcgi`,
         params,
         this.headers,
@@ -340,23 +413,17 @@ export class PubMedService {
         return { similar_articles: [], error: "Invalid PMID" };
       }
 
-      if (email && !this.validateEmail(email)) {
-        email = undefined;
-      }
-
       const original = await this.getArticleDetailsAsync(pmid, "pmid");
       const elinkParams: Record<string, any> = {
+        ...buildNcbiParams(email),
         dbfrom: "pubmed",
         db: "pubmed",
         id: pmid,
         linkname: "pubmed_pubmed",
         retmode: "xml",
       };
-      if (email) {
-        elinkParams.email = email;
-      }
 
-      const elinkXmlString = await defaultApiClient.getText(
+      const elinkXmlString = await this.ncbiGetText(
         `${this.baseUrl}elink.fcgi`,
         elinkParams,
         this.headers,
@@ -382,16 +449,14 @@ export class PubMedService {
       }
 
       const efetchParams: Record<string, any> = {
+        ...buildNcbiParams(email),
         db: "pubmed",
         id: similarPmids.join(","),
         retmode: "xml",
         rettype: "xml",
       };
-      if (email) {
-        efetchParams.email = email;
-      }
 
-      const efetchXmlString = await defaultApiClient.getText(
+      const efetchXmlString = await this.ncbiGetText(
         `${this.baseUrl}efetch.fcgi`,
         efetchParams,
         this.headers,
@@ -445,6 +510,7 @@ export class PubMedService {
 
       const xmlUrl = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi";
       const params = {
+        ...buildNcbiParams(),
         db: "pmc",
         id: normalizedPmcId,
         rettype: "xml",
@@ -452,7 +518,7 @@ export class PubMedService {
       };
 
       this.logger.info(`Async requesting PMC fulltext: ${normalizedPmcId}`);
-      const fulltextXml = await defaultApiClient.getText(xmlUrl, params, undefined, 60000);
+      const fulltextXml = await this.ncbiGetText(xmlUrl, params, undefined, 60000);
 
       if (!fulltextXml || !fulltextXml.trim()) {
         return {
@@ -525,26 +591,30 @@ export class PubMedService {
     includeFulltext = false,
   ): Promise<{ article: ArticleInfo | null; error?: string }> {
     try {
-      let query = "";
-      if (idType.toLowerCase() === "pmid") {
-        query = `EXT_ID:${identifier}`;
-      } else if (idType.toLowerCase() === "pmcid") {
-        query = identifier.startsWith("PMC") ? `PMCID:${identifier}` : `PMCID:PMC${identifier}`;
-      } else {
-        query = `${idType.toUpperCase()}:${identifier}`;
-      }
-
-      const params = { query, format: "json", resultType: "core" };
-      const data = await defaultApiClient.getJson<any>(this.baseUrl, params, this.headers, 60000);
-      const results = data?.resultList?.result || [];
-      if (!results.length) {
+      const pmid = await this.resolvePmidAsync(identifier, idType);
+      if (!pmid) {
         return {
           article: null,
           error: `No literature found with ${idType.toUpperCase()}=${identifier}`,
         };
       }
 
-      const articleInfo = this.processArticle(results[0]);
+      const efetchParams = {
+        ...buildNcbiParams(),
+        db: "pubmed",
+        id: pmid,
+        retmode: "xml",
+        rettype: "xml",
+      };
+      const efetchXmlString = await this.ncbiGetText(
+        `${this.baseUrl}efetch.fcgi`,
+        efetchParams,
+        this.headers,
+        30000,
+      );
+      const efetchXml = this.parser.parse(efetchXmlString);
+      const articleNode = this.toArray(efetchXml.PubmedArticleSet?.PubmedArticle)[0];
+      const articleInfo = articleNode ? this.processArticle(articleNode) : null;
       if (!articleInfo) {
         return { article: null, error: "Failed to process article information" };
       }
@@ -572,19 +642,31 @@ export class PubMedService {
     }
 
     try {
-      const doiQueries = dois.map((doi) => `DOI:"${doi}"`);
-      const query = doiQueries.join(" OR ");
-      const params = {
-        query,
-        format: "json",
-        resultType: "core",
-        pageSize: dois.length,
-        cursorMark: "*",
-      };
-
       this.logger.info(`Batch query ${dois.length} DOIs`);
-      const data = await defaultApiClient.getJson<any>(this.baseUrl, params, this.headers, 60000);
-      const results = data?.resultList?.result || [];
+      const pmids = (
+        await Promise.all(dois.map((doi) => this.findPmidByDoiAsync(doi)))
+      ).filter((pmid): pmid is string => Boolean(pmid));
+      if (!pmids.length) {
+        return [];
+      }
+
+      const efetchParams = {
+        ...buildNcbiParams(),
+        db: "pubmed",
+        id: pmids.join(","),
+        retmode: "xml",
+        rettype: "xml",
+      };
+      const efetchXmlString = await this.ncbiGetText(
+        `${this.baseUrl}efetch.fcgi`,
+        efetchParams,
+        this.headers,
+        60000,
+      );
+      const efetchXml = this.parser.parse(efetchXmlString);
+      const results = this.toArray(efetchXml.PubmedArticleSet?.PubmedArticle)
+        .map((article) => this.processArticle(article))
+        .filter((article): article is ArticleInfo => Boolean(article));
       this.logger.info(`Batch query returned ${results.length} results`);
       return results;
     } catch (e) {
@@ -609,8 +691,22 @@ export class PubMedService {
     return result;
   }
 
-  private validateEmail(email: string): boolean {
-    return (email && email.includes("@") && email.split("@")[1]?.includes(".")) || false;
+  private resolveRateLimitDelayMs(): number {
+    const configured = Number(process.env.NCBI_RATE_LIMIT_MS);
+    if (Number.isFinite(configured) && configured >= 0) {
+      return configured;
+    }
+
+    return process.env.NODE_ENV === "test" ? 0 : 333;
+  }
+
+  private async ncbiGetText(
+    url: string,
+    params?: Record<string, unknown>,
+    headers?: Record<string, string>,
+    timeout?: number,
+  ): Promise<string> {
+    return this.rateLimiter.schedule(() => defaultApiClient.getText(url, params, headers, timeout));
   }
 
   private buildTerm(keyword: string, startDate?: string, endDate?: string): string {
@@ -671,6 +767,61 @@ export class PubMedService {
 
     const formatDate = (d: Date) => d.toISOString().split("T")[0];
     return `(${formatDate(startDt!)}[PDAT] : ${formatDate(endDt!)}[PDAT])`;
+  }
+
+  private async resolvePmidAsync(identifier: string, idType: string): Promise<string | null> {
+    const normalizedType = idType.toLowerCase();
+    const normalizedIdentifier = identifier
+      .replace(/^DOI:/i, "")
+      .replace(/^PMID:/i, "")
+      .replace(/^PMCID:/i, "")
+      .trim();
+
+    if (!normalizedIdentifier) {
+      return null;
+    }
+
+    if (normalizedType === "pmid") {
+      return /^\d+$/.test(normalizedIdentifier) ? normalizedIdentifier : null;
+    }
+
+    if (normalizedType === "doi") {
+      return this.findPmidByDoiAsync(normalizeDoiIdentifier(normalizedIdentifier));
+    }
+
+    if (normalizedType === "pmcid") {
+      const pmcid = normalizedIdentifier.toUpperCase().startsWith("PMC")
+        ? normalizedIdentifier
+        : `PMC${normalizedIdentifier}`;
+      const ids = await this.searchPubmedIdsAsync(`${pmcid}[PMCID]`, 1);
+      return ids[0] ?? null;
+    }
+
+    const ids = await this.searchPubmedIdsAsync(
+      `${normalizedIdentifier}[${normalizedType.toUpperCase()}]`,
+      1,
+    );
+    return ids[0] ?? null;
+  }
+
+  private async searchPubmedIdsAsync(term: string, retmax: number): Promise<string[]> {
+    const params = {
+      ...buildNcbiParams(),
+      db: "pubmed",
+      term,
+      retmax: String(retmax),
+      retmode: "xml",
+    };
+    const xmlString = await this.ncbiGetText(
+      `${this.baseUrl}esearch.fcgi`,
+      params,
+      this.headers,
+      30000,
+    );
+    const xml = this.parser.parse(xmlString);
+    return this.toArray(this.nodeTextOrArray(xml.eSearchResult?.IdList?.Id)).map((id) =>
+      String(id),
+    );
   }
 
   private processArticle(article: any): ArticleInfo | null {
@@ -849,3 +1000,4 @@ export class PubMedService {
 export function createPubMedService(logger?: Console): PubMedService {
   return new PubMedService(logger);
 }
+

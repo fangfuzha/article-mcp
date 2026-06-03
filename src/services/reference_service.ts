@@ -4,6 +4,7 @@
 import { CrossRefService } from "./crossref_service.js";
 import { EuropePMCService } from "./europe_pmc.js";
 import { PubMedService } from "./pubmed_search.js";
+import { normalizeDoiIdentifier } from "../utils/service_identity.js";
 
 export type ReferenceIdentifierType = "auto" | "doi" | "pmid" | "pmcid";
 
@@ -71,7 +72,10 @@ export class UnifiedReferenceService {
 
     const resolved = await this.resolveArticleIdentifiers(identifier, normalizedIdType);
     const doiIdentifier =
-      resolved.doi ?? (normalizedIdType === "doi" ? this.stripIdentifierPrefix(identifier) : null);
+      resolved.doi ??
+      (normalizedIdType === "doi"
+        ? normalizeDoiIdentifier(this.stripIdentifierPrefix(identifier))
+        : null);
     const pmidIdentifier =
       resolved.pmid ??
       (normalizedIdType === "pmid" ? this.stripIdentifierPrefix(identifier) : null);
@@ -87,12 +91,14 @@ export class UnifiedReferenceService {
     }
 
     if (sourceList.includes("pubmed") && pmidIdentifier) {
-      const result = await this.services.pubmed.getCitingArticlesAsync(
+      const result = await this.services.pubmed.getReferencedArticlesAsync(
         pmidIdentifier,
         undefined,
         maxResults,
       );
-      pubmedReferences = Array.isArray(result.citing_articles) ? result.citing_articles : [];
+      pubmedReferences = Array.isArray(result.referenced_articles)
+        ? result.referenced_articles
+        : [];
     }
 
     if (sourceList.includes("europe_pmc")) {
@@ -220,7 +226,10 @@ export class UnifiedReferenceService {
     identifier: string,
     idType: "doi" | "pmid" | "pmcid",
   ): Promise<ResolvedReferenceIdentifiers> {
-    const normalizedIdentifier = this.stripIdentifierPrefix(identifier);
+    const normalizedIdentifier =
+      idType === "doi"
+        ? normalizeDoiIdentifier(this.stripIdentifierPrefix(identifier))
+        : this.stripIdentifierPrefix(identifier);
 
     if (idType === "doi") {
       const pmid = await this.services.pubmed.findPmidByDoiAsync(normalizedIdentifier);
@@ -386,9 +395,8 @@ export class UnifiedReferenceService {
     for (const [source, references] of Object.entries(referencesBySource)) {
       for (const rawReference of references) {
         const reference = this.isRecord(rawReference) ? rawReference : { value: rawReference };
-        const doi = String(reference.doi ?? reference.DOI ?? "")
-          .trim()
-          .toLowerCase();
+        const rawDoi = String(reference.doi ?? reference.DOI ?? "").trim();
+        const doi = normalizeDoiIdentifier(rawDoi).toLowerCase();
         const title = String(reference.title ?? "")
           .trim()
           .toLowerCase()
@@ -400,7 +408,7 @@ export class UnifiedReferenceService {
           authors: reference.authors ?? [],
           journal: reference.journal ?? reference.journal_name ?? "",
           publication_date: reference.publication_date ?? reference.year ?? "",
-          doi: reference.doi ?? reference.DOI ?? "",
+          doi: doi || rawDoi,
           pmid: reference.pmid ?? "",
           pmcid: reference.pmcid ?? reference.pmc_id ?? "",
           source,
@@ -446,7 +454,7 @@ export class UnifiedReferenceService {
         continue;
       }
 
-      const doi = String(reference.doi ?? reference.DOI ?? "").trim();
+      const doi = normalizeDoiIdentifier(String(reference.doi ?? reference.DOI ?? ""));
       const normalizedDoi = doi.toLowerCase();
       if (!doi || seen.has(normalizedDoi)) {
         continue;
@@ -466,9 +474,7 @@ export class UnifiedReferenceService {
    * @returns 基于 DOI 或标题的去重键。
    */
   private referenceKey(reference: Record<string, unknown>): string | null {
-    const doi = String(reference.doi ?? reference.DOI ?? "")
-      .trim()
-      .toLowerCase();
+    const doi = normalizeDoiIdentifier(String(reference.doi ?? reference.DOI ?? "")).toLowerCase();
     if (doi) {
       return `doi:${doi}`;
     }
@@ -489,6 +495,7 @@ export class UnifiedReferenceService {
   private stripIdentifierPrefix(identifier: string): string {
     return identifier
       .replace(/^DOI:/i, "")
+      .replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "")
       .replace(/^PMID:/i, "")
       .replace(/^PMCID:/i, "")
       .trim();

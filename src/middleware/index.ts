@@ -105,7 +105,10 @@ export class RateLimiter {
 
     this.queue = resultPromise.then(
       () => undefined,
-      () => undefined,
+      (error: unknown) => {
+        // 记录失败但继续处理后续任务，避免阻塞队列
+        console.error(`[RateLimiter] 任务执行失败: ${error instanceof Error ? error.message : String(error)}`);
+      },
     );
 
     return resultPromise;
@@ -163,29 +166,6 @@ export class ToolExecutionPipeline {
 }
 
 /**
- * 创建将工具异常转换为 MCP 错误结果的中间件。
- *
- * @returns 用于异常边界的工具中间件。
- */
-export function createErrorBoundaryMiddleware(): ToolMiddleware {
-  return async (_context, next) => {
-    try {
-      return await next(_context);
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: formatToolError(error),
-          },
-        ],
-        isError: true,
-      };
-    }
-  };
-}
-
-/**
  * 创建向工具响应注入 processing_time 和 timestamp 的中间件。
  *
  * Python 版 TimingMiddleware 自动为每个 dict 结果注入计时信息。
@@ -239,8 +219,21 @@ function injectTimingIntoResult(
       try {
         const parsed = JSON.parse(item.text);
         if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-          parsed.processing_time_ms = processingTime;
-          parsed.timestamp = timestamp;
+          if (
+            "meta" in parsed &&
+            typeof parsed.meta === "object" &&
+            parsed.meta !== null &&
+            !Array.isArray(parsed.meta)
+          ) {
+            parsed.meta = {
+              ...(parsed.meta as Record<string, unknown>),
+              processing_time_ms: processingTime,
+              timestamp,
+            };
+          } else {
+            parsed.processing_time_ms = processingTime;
+            parsed.timestamp = timestamp;
+          }
           return { ...item, text: JSON.stringify(parsed) };
         }
       } catch {

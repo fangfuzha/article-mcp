@@ -4,6 +4,8 @@
 import { CacheManager } from "../middleware/index.js";
 import type { OpenAlexJournalMetrics } from "../types/journals.js";
 import { defaultApiClient } from "../utils/api_utils.js";
+import { addOpenAlexAuthParams } from "../utils/service_identity.js";
+import { stdioSafeLogger } from "../utils/stdio_safe_logger.js";
 
 /**
  * OpenAlex 期刊指标补充服务。
@@ -11,6 +13,8 @@ import { defaultApiClient } from "../utils/api_utils.js";
 export class OpenAlexMetricsService {
   private readonly baseUrl = "https://api.openalex.org/sources";
   private readonly cacheManager = new CacheManager();
+
+  constructor(private readonly logger: Pick<Console, "error" | "warn"> = stdioSafeLogger) {}
 
   /**
    * 获取单个期刊的 OpenAlex 指标。
@@ -29,12 +33,18 @@ export class OpenAlexMetricsService {
     }
 
     const fetchMetrics = async (): Promise<OpenAlexJournalMetrics | null> => {
-      const data = await defaultApiClient.getJson<any>(this.baseUrl, {
-        search: trimmedName,
-        per_page: 1,
-      });
+      const data = await defaultApiClient.getJson<any>(
+        this.baseUrl,
+        addOpenAlexAuthParams({
+          search: trimmedName,
+          filter: "type:journal",
+          per_page: 5,
+          select:
+            "id,display_name,alternate_titles,issn_l,issn,summary_stats,cited_by_count,works_count,type",
+        }),
+      );
 
-      const source = data?.results?.[0];
+      const source = this.selectBestSource(data?.results || [], trimmedName);
       if (!source) {
         return null;
       }
@@ -59,6 +69,35 @@ export class OpenAlexMetricsService {
       fetchMetrics,
       24,
     );
+  }
+
+  private selectBestSource(sources: any[], journalName: string): any | null {
+    if (!Array.isArray(sources) || !sources.length) {
+      return null;
+    }
+
+    const normalizedJournalName = this.normalizeSourceName(journalName);
+    return (
+      sources.find(
+        (source) => this.normalizeSourceName(source?.display_name) === normalizedJournalName,
+      ) ??
+      sources.find((source) =>
+        (source?.alternate_titles || []).some(
+          (title: unknown) => this.normalizeSourceName(title) === normalizedJournalName,
+        ),
+      ) ??
+      sources[0]
+    );
+  }
+
+  private normalizeSourceName(value: unknown): string {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/&/g, "and")
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim();
   }
 
   /**

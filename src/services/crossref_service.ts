@@ -5,15 +5,17 @@ type JsonValue = any;
 
 import { defaultApiClient } from "../utils/api_utils.js";
 import { CacheManager } from "../middleware/index.js";
+import { buildCrossrefRequestOptions, normalizeDoiIdentifier } from "../utils/service_identity.js";
+import { stdioSafeLogger } from "../utils/stdio_safe_logger.js";
 
 /**
  * CrossRef 服务类
  */
 export class CrossRefService {
-  private baseUrl = "https://api.crossref.org";
+  private baseUrl = "https://api.crossref.org/v1";
   private cacheManager: CacheManager;
 
-  constructor() {
+  constructor(private readonly logger: Pick<Console, "error" | "warn"> = stdioSafeLogger) {
     this.cacheManager = new CacheManager();
   }
 
@@ -33,7 +35,7 @@ export class CrossRefService {
           ? item["short-container-title"][0]
           : item["short-container-title"]
         : "",
-      publication_date: item.created?.["date-time"] || "",
+      publication_date: this.extractPublicationDate(item),
       source: "crossref",
       raw_data: item,
     };
@@ -67,6 +69,32 @@ export class CrossRefService {
       }
     }
     return authors;
+  }
+
+  /**
+   * 从 Crossref work 中提取真实发表日期，避免把记录创建日期误当作论文发表日期。
+   */
+  private extractPublicationDate(item: Record<string, JsonValue>): string {
+    const dateSources = [
+      item["published-print"],
+      item["published-online"],
+      item.published,
+      item.issued,
+      item.created,
+    ];
+
+    for (const dateSource of dateSources) {
+      const dateParts = dateSource?.["date-parts"]?.[0];
+      if (Array.isArray(dateParts) && dateParts.length > 0) {
+        return dateParts.map((part: unknown) => String(part).padStart(2, "0")).join("-");
+      }
+
+      if (dateSource?.["date-time"]) {
+        return String(dateSource["date-time"]).split("T")[0] ?? "";
+      }
+    }
+
+    return "";
   }
 
   /**
@@ -160,13 +188,16 @@ export class CrossRefService {
       async () => {
         try {
           const url = `${this.baseUrl}/works`;
+          const requestOptions = buildCrossrefRequestOptions();
           const params = {
+            ...requestOptions.params,
             query,
             rows: maxResults,
-            select: "title,author,DOI,created,member,short-container-title",
+            select:
+              "title,author,DOI,published-print,published-online,published,issued,created,member,short-container-title",
           };
 
-          const data = await defaultApiClient.getJson<any>(url, params);
+          const data = await defaultApiClient.getJson<any>(url, params, requestOptions.headers);
           const message = data.message || {};
 
           return {
@@ -176,7 +207,7 @@ export class CrossRefService {
             source: "crossref",
           };
         } catch (error: any) {
-          console.error(`CrossRef 异步搜索失败: ${error.message}`);
+          this.logger.error(`CrossRef 异步搜索失败: ${error.message}`);
           return {
             success: false,
             articles: [],
@@ -195,16 +226,22 @@ export class CrossRefService {
    * 异步通过 DOI 获取文献详情
    */
   public async getWorkByDoiAsync(doi: string): Promise<Record<string, JsonValue>> {
-    const cacheKey = `crossref_doi_${doi}`;
+    const normalizedDoi = normalizeDoiIdentifier(doi);
+    const cacheKey = `crossref_doi_${normalizedDoi}`;
 
     return this.cacheManager.getCachedOrFetch(
       cacheKey,
       async () => {
         try {
-          const encodedDoi = encodeURIComponent(doi).replace(/%2F/g, "/");
+          const encodedDoi = encodeURIComponent(normalizedDoi).replace(/%2F/g, "/");
           const url = `${this.baseUrl}/works/${encodedDoi}`;
+          const requestOptions = buildCrossrefRequestOptions();
 
-          const data = await defaultApiClient.getJson<any>(url);
+          const data = await defaultApiClient.getJson<any>(
+            url,
+            requestOptions.params,
+            requestOptions.headers,
+          );
           const article = data.message || {};
 
           return {
@@ -213,7 +250,7 @@ export class CrossRefService {
             source: "crossref",
           };
         } catch (error: any) {
-          console.error(`CrossRef 获取详情失败: ${error.message}`);
+          this.logger.error(`CrossRef 获取详情失败: ${error.message}`);
           return {
             success: false,
             article: null,
@@ -233,16 +270,22 @@ export class CrossRefService {
     doi: string,
     maxResults: number = 20,
   ): Promise<Record<string, any>> {
-    const cacheKey = `crossref_references_${doi}_${maxResults}`;
+    const normalizedDoi = normalizeDoiIdentifier(doi);
+    const cacheKey = `crossref_references_${normalizedDoi}_${maxResults}`;
 
     return this.cacheManager.getCachedOrFetch(
       cacheKey,
       async () => {
         try {
-          const encodedDoi = encodeURIComponent(doi).replace(/%2F/g, "/");
+          const encodedDoi = encodeURIComponent(normalizedDoi).replace(/%2F/g, "/");
           const url = `${this.baseUrl}/works/${encodedDoi}`;
+          const requestOptions = buildCrossrefRequestOptions();
 
-          const data = await defaultApiClient.getJson<any>(url);
+          const data = await defaultApiClient.getJson<any>(
+            url,
+            requestOptions.params,
+            requestOptions.headers,
+          );
           const workData = data.message || {};
           const references = workData.reference || [];
 
@@ -253,7 +296,7 @@ export class CrossRefService {
             source: "crossref",
           };
         } catch (error: any) {
-          console.error(`CrossRef 获取参考文献失败: ${error.message}`);
+          this.logger.error(`CrossRef 获取参考文献失败: ${error.message}`);
           return {
             success: false,
             references: [],

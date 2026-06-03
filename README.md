@@ -49,15 +49,15 @@ article-mcp
 | 工具                       | 说明                                                  |
 | -------------------------- | ----------------------------------------------------- |
 | `search_literature`        | 多源文献搜索，自动去重排序                            |
-| `get_article_details`      | 获取文献全文（支持批量），全文可通过资源 URI 重新读取 |
+| `get_article_details`      | 获取文献全文（支持批量），通过结构化结果直接返回全文预览 |
 | `get_references`           | 获取参考文献列表                                      |
-| `get_literature_relations` | 分析文献引用关系网络，关系结果可通过资源 URI 重新计算 |
+| `get_literature_relations` | 分析文献引用关系网络，直接返回关系和可选网络数据 |
 | `get_journal_quality`      | 评估期刊质量指标                                      |
 
 ## 输出说明
 
 - 工具返回的机器可读结果使用统一的 `structuredContent` 包装。
-- `content` 仅保留摘要和关键摘录，不再承载完整 JSON。
+- `content` 的第一段文本保留摘要和关键摘录，后续文本段提供同一结构化结果的 JSON 备份以兼容旧 MCP 客户端。
 - `get_article_details` 通过 tool 结构化结果直接返回全文预览、格式、章节匹配和截断信息。
 - `get_literature_relations` 通过 tool 结构化结果直接返回引用、相似文献、施引文献和网络分析数据。
 
@@ -66,6 +66,13 @@ article-mcp
 | 变量                     | 说明                                                                                           |
 | ------------------------ | ---------------------------------------------------------------------------------------------- |
 | `EASYSCHOLAR_SECRET_KEY` | EasyScholar API 密钥（期刊质量评估），[点击获取](https://www.easyscholar.cc/console/user/open) |
+| `OPENALEX_API_KEY`       | OpenAlex API key，用于认证请求。                                                               |
+| `NCBI_EMAIL`             | NCBI E-utilities 请求中的联系邮箱。                                                            |
+| `NCBI_API_KEY`           | 可选的 NCBI E-utilities API key。                                                              |
+| `CROSSREF_MAILTO`        | Crossref REST API 请求中的联系邮箱，并用于 polite User-Agent。                                  |
+| `ARXIV_RATE_LIMIT_MS`    | 可选的 arXiv API 请求间隔覆盖值；默认按官方建议使用 3000ms。                                    |
+| `EUROPE_PMC_RATE_LIMIT_MS` | 可选的 Europe PMC API 请求间隔覆盖值；默认 1000ms。                                           |
+| `SEMANTIC_SCHOLAR_API_KEY` | Semantic Scholar Graph API key，用于引用检索请求。                                           |
 | `ARTICLE_MCP_LANG`       | 工具说明语言：`zh-CN`（默认）或 `en`                                                           |
 
 ## 许可证

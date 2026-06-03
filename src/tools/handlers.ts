@@ -99,13 +99,24 @@ async function handleSearchLiterature(
 ): Promise<CallToolResult> {
   const args = SearchLiteratureArgumentsSchema.parse(toolArguments);
   const strategy = SEARCH_STRATEGIES[args.search_type] ?? DEFAULT_SEARCH_STRATEGY;
-  const sources = args.sources?.length ? args.sources : strategy.defaultSources;
+  const validSources = ["europe_pmc", "pubmed", "arxiv", "crossref", "openalex"] as const;
+  const sources = (args.sources?.length ? args.sources : strategy.defaultSources).filter(
+    (source) => validSources.includes(source as (typeof validSources)[number]),
+  );
+  const invalidSources = (args.sources?.length ? args.sources : []).filter(
+    (source) => !validSources.includes(source as (typeof validSources)[number]),
+  );
   const maxResultsPerSource = Math.min(args.max_results, strategy.maxResultsPerSource);
 
   // 文件缓存层（Python SearchCache 等价）
   let cacheKey: string | undefined;
   if (searchCache && args.use_cache) {
-    cacheKey = SearchCache.generateKey(args.keyword, sources, maxResultsPerSource);
+    cacheKey = SearchCache.generateKey(
+      args.keyword,
+      sources,
+      maxResultsPerSource,
+      args.search_type,
+    );
     const cached = (await searchCache.get(cacheKey)) as Record<string, unknown> | null;
     if (cached) {
       cached.cached = true;
@@ -141,45 +152,58 @@ async function handleSearchLiterature(
     );
   };
 
+  const failedSources: Array<{ source: string; error: string }> = [];
+
   await Promise.all(
     sources.map(async (source) => {
-      if (source === "europe_pmc") {
-        const result = await services.europePmc.searchAsync(
-          args.keyword,
-          undefined,
-          undefined,
-          undefined,
-          maxResultsPerSource,
-          args.use_cache,
-        );
-        recordSearchResults(source, result);
-      } else if (source === "pubmed") {
-        const result = await services.pubmed.searchAsync(
-          args.keyword,
-          undefined,
-          undefined,
-          undefined,
-          maxResultsPerSource,
-          args.use_cache,
-        );
-        recordSearchResults(source, result);
-      } else if (source === "arxiv") {
-        const result = await services.arxiv.search({
-          keyword: args.keyword,
-          max_results: maxResultsPerSource,
-          use_cache: args.use_cache,
-        });
-        recordSearchResults(source, result);
-      } else if (source === "crossref") {
-        const result = await services.crossref.searchWorksAsync(
-          args.keyword,
-          maxResultsPerSource,
-          args.use_cache,
-        );
-        recordSearchResults(source, result);
-      } else if (source === "openalex") {
-        const result = await services.openalex.searchWorksAsync(args.keyword, maxResultsPerSource);
-        recordSearchResults(source, result);
+      try {
+        if (source === "europe_pmc") {
+          const result = await services.europePmc.searchAsync(
+            args.keyword,
+            undefined,
+            undefined,
+            undefined,
+            maxResultsPerSource,
+            args.use_cache,
+          );
+          recordSearchResults(source, result);
+        } else if (source === "pubmed") {
+          const result = await services.pubmed.searchAsync(
+            args.keyword,
+            undefined,
+            undefined,
+            undefined,
+            maxResultsPerSource,
+            args.use_cache,
+          );
+          recordSearchResults(source, result);
+        } else if (source === "arxiv") {
+          const result = await services.arxiv.search({
+            keyword: args.keyword,
+            max_results: maxResultsPerSource,
+            use_cache: args.use_cache,
+          });
+          recordSearchResults(source, result);
+        } else if (source === "crossref") {
+          const result = await services.crossref.searchWorksAsync(
+            args.keyword,
+            maxResultsPerSource,
+            args.use_cache,
+          );
+          recordSearchResults(source, result);
+        } else if (source === "openalex") {
+          const result = await services.openalex.searchWorksAsync(
+            args.keyword,
+            maxResultsPerSource,
+            undefined,
+            args.use_cache,
+          );
+          recordSearchResults(source, result);
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.warn(`[MCP] 搜索源 ${source} 失败: ${errorMessage}`);
+        failedSources.push({ source, error: errorMessage });
       }
     }),
   );
@@ -205,6 +229,8 @@ async function handleSearchLiterature(
     cached: cacheHit,
     cache_hit: cacheHit,
     cache_hits_by_source: cacheHitsBySource,
+    ...(failedSources.length ? { failed_sources: failedSources } : {}),
+    ...(invalidSources.length ? { invalid_sources: invalidSources } : {}),
   };
 
   // 保存到文件缓存
@@ -516,7 +542,13 @@ async function handleGetJournalQuality(
         : {};
       const resolvedOpenAlexMetrics = isRecord(openalexMetrics) ? openalexMetrics : {};
       const hasEasyScholarMetrics = hasJournalMetricValues(easyScholarMetrics);
-      const hasOpenAlexMetrics = hasJournalMetricValues(resolvedOpenAlexMetrics, ["source"]);
+      const cachedOpenAlexKeys =
+        !openalexMetrics &&
+        OPENALEX_JOURNAL_METRIC_KEYS.some(
+          (key) => easyScholarMetrics[key] !== null && easyScholarMetrics[key] !== undefined && easyScholarMetrics[key] !== "",
+        );
+      const hasOpenAlexMetrics =
+        hasJournalMetricValues(resolvedOpenAlexMetrics, ["source"]) || cachedOpenAlexKeys;
       const includeMetrics = resolveJournalIncludeMetrics(
         requestedIncludeMetrics,
         hasEasyScholarMetrics,

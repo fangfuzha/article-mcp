@@ -7,7 +7,6 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import { createMCPErrorHandlingMiddleware } from "../src/middleware/error_handling.js";
 import {
-  createErrorBoundaryMiddleware,
   createLoggingMiddleware,
   createTimingMiddleware,
   ToolExecutionPipeline,
@@ -33,6 +32,21 @@ describe("TimingMiddleware", () => {
     expect(parsed.processing_time_ms).toBeGreaterThanOrEqual(0);
     expect(parsed.timestamp).toBeTypeOf("number");
     expect(parsed.timestamp).toBeGreaterThan(0);
+  });
+
+  it("注入 timing 到结构化 envelope JSON 的 meta 字段", async () => {
+    const middleware = createTimingMiddleware();
+    const context: ToolExecutionContext = { toolName: "test_tool", arguments: {} };
+    const handler: ToolNext = async () =>
+      makeTextResult(JSON.stringify({ success: true, data: {}, meta: {} }));
+
+    const result = await middleware(context, handler);
+    const parsed = JSON.parse((result.content[0] as { type: "text"; text: string }).text);
+
+    expect(parsed.processing_time_ms).toBeUndefined();
+    expect(parsed.timestamp).toBeUndefined();
+    expect(parsed.meta.processing_time_ms).toBeTypeOf("number");
+    expect(parsed.meta.timestamp).toBeTypeOf("number");
   });
 
   it("非 JSON 文本结果不注入计时", async () => {
@@ -82,7 +96,7 @@ describe("ToolExecutionPipeline with middleware stack", () => {
     const executionOrder: string[] = [];
 
     const pipeline = new ToolExecutionPipeline([
-      createErrorBoundaryMiddleware(),
+      createMCPErrorHandlingMiddleware(),
       createLoggingMiddleware(),
       createTimingMiddleware(),
     ]);
@@ -101,7 +115,7 @@ describe("ToolExecutionPipeline with middleware stack", () => {
   });
 
   it("错误边界中间件捕获异常并返回 MCP 错误结果", async () => {
-    const pipeline = new ToolExecutionPipeline([createErrorBoundaryMiddleware()]);
+    const pipeline = new ToolExecutionPipeline([createMCPErrorHandlingMiddleware()]);
     const handler: ToolNext = async () => {
       throw new Error("处理器内部错误");
     };

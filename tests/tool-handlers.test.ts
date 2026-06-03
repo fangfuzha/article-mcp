@@ -107,6 +107,17 @@ function createMockServices(): ArticleMcpServices {
           },
         ],
       }),
+      getReferencedArticlesAsync: async () => ({
+        referenced_articles: [
+          {
+            title: "Reference A",
+            doi: "10.1000/ref-a",
+            authors: ["Alice"],
+            journal_name: "PubMed Journal",
+            abstract: "Extra metadata",
+          },
+        ],
+      }),
       findPmidByDoiAsync: async () => "12345",
       getSimilarArticlesAsync: async () => ({
         similar_articles: [
@@ -202,6 +213,18 @@ describe("tool handlers", () => {
       expect(textContent.text).toContain("找到");
       expect(textContent.text).toContain("关键摘录:");
       expect(() => JSON.parse(textContent.text)).toThrow();
+    }
+
+    const jsonContent = result.content[1];
+    expect(jsonContent?.type).toBe("text");
+    if (jsonContent?.type === "text") {
+      const envelope = JSON.parse(jsonContent.text);
+      expect(envelope).toMatchObject({
+        success: true,
+        data: {
+          keyword: "summary",
+        },
+      });
     }
   });
 
@@ -503,6 +526,49 @@ describe("tool handlers", () => {
     expect(result.merged_references[0].source).toBe("europe_pmc");
     expect(result.merged_references[0]).not.toHaveProperty("abstract");
     expect(result.references_by_source.europe_pmc[0]).not.toHaveProperty("abstract");
+  });
+
+  it("deduplicates DOI URLs and bare DOI references as the same item", async () => {
+    const services = createMockServices();
+    services.europePmc.getReferencesAsync = async () => ({
+      references: [
+        {
+          title: "Reference URL",
+          doi: "https://doi.org/10.1000/ref-url",
+          authors: ["Europe Author"],
+          journal: "Europe PMC Journal",
+        },
+      ],
+      total_count: 1,
+      source: "europe_pmc",
+    });
+    services.crossref.getReferencesAsync = async () => ({
+      references: [
+        {
+          title: "Reference Bare",
+          doi: "10.1000/ref-url",
+          authors: ["Crossref Author"],
+          journal: "Crossref Journal",
+        },
+      ],
+    });
+    services.europePmc.searchBatchDoiAsync = async () => [];
+
+    const handlers = createToolHandlers(services);
+    const result = parseTextResult(
+      await handlers.get_references!({
+        identifier: "https://doi.org/10.1000/source",
+        id_type: "doi",
+        sources: ["crossref", "europe_pmc"],
+      }),
+    );
+
+    expect(result.resolved_identifier.doi).toBe("10.1000/source");
+    expect(result.merged_references).toHaveLength(1);
+    expect(result.merged_references[0]).toMatchObject({
+      doi: "10.1000/ref-url",
+      source: "europe_pmc",
+    });
   });
 
   it("returns a friendly error when the reference identifier is empty", async () => {

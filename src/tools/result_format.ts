@@ -43,6 +43,10 @@ export function createStructuredToolResult(
       type: "text",
       text: lines.join("\n"),
     },
+    {
+      type: "text",
+      text: JSON.stringify(envelope),
+    },
   ];
 
   return {

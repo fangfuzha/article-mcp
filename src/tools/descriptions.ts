@@ -74,7 +74,7 @@ export const TOOL_DESCRIPTION_CATALOG = {
 主要参数：
 - identifier: 文献标识符（必填）：DOI、PMID、PMCID
 - id_type: 标识符类型（默认doi）：auto/doi/pmid/pmcid
-- sources: 数据源列表（默认["europe_pmc", "crossref"]）
+- sources: 数据源列表（默认["europe_pmc", "crossref", "pubmed"]）
 - max_results: 最大参考文献数量（默认20，建议20-100）
 - include_metadata: 是否包含详细元数据（默认true）
 
@@ -102,7 +102,7 @@ export const TOOL_DESCRIPTION_CATALOG = {
     get_journal_quality: `期刊质量评估工具。评估期刊的学术质量和影响力指标，集成 EasyScholar + OpenAlex 双数据源。
 
 支持的指标：
-EasyScholar 提供：impact_factor（影响因子）、quartile（SCI分区 Q1-Q4）、jci（JCI指数）、cas_zone（中科院分区）、cas_zone_top（TOP期刊标识）
+EasyScholar 提供：impact_factor（影响因子）、five_year_impact_factor（5年影响因子）、quartile（SCI分区 Q1-Q4）、jci（JCI指数）、cas_zone（中科院分区）、cas_zone_top（TOP期刊标识）
 OpenAlex 提供：h_index（h指数）、citation_rate（2年引用率）、cited_by_count（总引用数）、works_count（总文章数）、i10_index（i10指数）
 
 主要参数：
@@ -146,7 +146,7 @@ Data sources: Europe PMC and the PMC full-text database. The result includes tit
 Main parameters:
 - identifier: Article identifier, required. Supports DOI, PMID, and PMCID.
 - id_type: Identifier type, default doi. Supports auto, doi, pmid, and pmcid.
-- sources: Source list, default Europe PMC and CrossRef.
+- sources: Source list, default Europe PMC, CrossRef, and PubMed.
 - max_results: Maximum references to return, default 20.
 - include_metadata: Whether to include detailed metadata, default true.
 
@@ -168,7 +168,7 @@ Main parameters:
     get_journal_quality: `Evaluate journal quality and impact metrics with EasyScholar and OpenAlex.
 
 Supported metrics:
-- EasyScholar: impact_factor, quartile, jci, cas_zone, and cas_zone_top.
+- EasyScholar: impact_factor, five_year_impact_factor, quartile, jci, cas_zone, and cas_zone_top.
 - OpenAlex: h_index, citation_rate, cited_by_count, works_count, and i10_index.
 
 Main parameters:

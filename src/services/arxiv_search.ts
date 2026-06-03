@@ -8,9 +8,6 @@ import { XMLParser } from "fast-xml-parser";
 import { CacheManager, RateLimiter } from "../middleware/index.js";
 import { stdioSafeLogger } from "../utils/stdio_safe_logger.js";
 
-// Atom feed 命名空间
-const ATOM_NS = "http://www.w3.org/2005/Atom";
-
 /**
  * arXiv 搜索服务类
  */
@@ -19,12 +16,12 @@ export class ArxivSearchService {
   private cacheManager: CacheManager;
   private rateLimiter: RateLimiter;
   private parser: XMLParser;
-  private baseUrl = "http://export.arxiv.org/api/query?";
+  private baseUrl = "https://export.arxiv.org/api/query";
 
   constructor(private readonly logger: Pick<Console, "error" | "warn" | "info"> = stdioSafeLogger) {
     this.session = this.createRetrySession();
     this.cacheManager = new CacheManager();
-    this.rateLimiter = new RateLimiter(1000); // 1秒延迟
+    this.rateLimiter = new RateLimiter(this.resolveRateLimitDelayMs());
     this.parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: "@_",
@@ -60,6 +57,15 @@ export class ArxivSearchService {
     return instance;
   }
 
+  private resolveRateLimitDelayMs(): number {
+    const configured = Number(process.env.ARXIV_RATE_LIMIT_MS);
+    if (Number.isFinite(configured) && configured >= 0) {
+      return configured;
+    }
+
+    return process.env.NODE_ENV === "test" ? 0 : 3000;
+  }
+
   /**
    * 解析日期字符串
    */
@@ -88,11 +94,11 @@ export class ArxivSearchService {
       const xmlObj = entry as any;
 
       // 提取 arXiv ID
-      const entryId = xmlObj[`${ATOM_NS}id`] || "";
+      const entryId = this.readAtomField(xmlObj, "id") || "";
       const arxivId = entryId.includes("/abs/") ? entryId.split("/abs/")[1] : "N/A";
 
       // 获取摘要页链接
-      const links = xmlObj[`${ATOM_NS}link`] || [];
+      const links = this.readAtomField(xmlObj, "link") || [];
       const htmlLink = Array.isArray(links)
         ? links.find((l: any) => l["@_rel"] === "alternate" && l["@_type"] === "text/html")
         : links["@_rel"] === "alternate" && links["@_type"] === "text/html"
@@ -102,16 +108,16 @@ export class ArxivSearchService {
       const link = htmlLink?.["@_href"] || entryId;
 
       // 提取标题
-      const title = (xmlObj[`${ATOM_NS}title`] || "无标题").trim();
+      const title = (this.readAtomField(xmlObj, "title") || "无标题").trim();
 
       // 提取作者
-      const authorElems = xmlObj[`${ATOM_NS}author`] || [];
+      const authorElems = this.readAtomField(xmlObj, "author") || [];
       const authors = (Array.isArray(authorElems) ? authorElems : [authorElems])
-        .map((author: any) => (author[`${ATOM_NS}name`] || "").trim())
+        .map((author: any) => (this.readAtomField(author, "name") || "").trim())
         .filter((name: string) => name);
 
       // 提取发表日期
-      const publishedStr = xmlObj[`${ATOM_NS}published`];
+      const publishedStr = this.readAtomField(xmlObj, "published");
       let publicationDate = "日期未知";
       if (publishedStr) {
         try {
@@ -123,7 +129,7 @@ export class ArxivSearchService {
       }
 
       // 提取摘要
-      const summary = (xmlObj[`${ATOM_NS}summary`] || "无摘要").trim();
+      const summary = (this.readAtomField(xmlObj, "summary") || "无摘要").trim();
 
       // 提取 arXiv 分类
       const primaryCategory = xmlObj["arxiv:primary_category"]?.["@_term"] || "N/A";
@@ -147,6 +153,14 @@ export class ArxivSearchService {
       this.logger.warn(`处理 arXiv 条目时发生错误: ${error}`);
       return null;
     }
+  }
+
+  private readAtomField(entry: Record<string, any>, fieldName: string): any {
+    return (
+      entry[fieldName] ??
+      entry[`atom:${fieldName}`] ??
+      entry[`http://www.w3.org/2005/Atom${fieldName}`]
+    );
   }
 
   /**
@@ -193,8 +207,7 @@ export class ArxivSearchService {
     return this.cacheManager.getCachedOrFetch(
       cacheKey,
       async () => {
-        return this.rateLimiter.schedule(async () => {
-          try {
+        try {
             // 构建基础查询
             const searchQueryParts: string[] = [`all:${keyword.trim()}`];
 
@@ -239,7 +252,7 @@ export class ArxivSearchService {
             let startIndex = 0;
             const resultsPerPage = Math.min(100, max_results);
 
-            this.logger.error(`开始搜索 arXiv: ${keyword}`);
+            this.logger.info(`开始搜索 arXiv: ${keyword}`);
 
             while (articles.length < max_results) {
               const numToFetch = Math.min(resultsPerPage, max_results - articles.length);
@@ -256,7 +269,9 @@ export class ArxivSearchService {
               };
 
               try {
-                const response = await this.session.get(url, { headers });
+                const response = await this.rateLimiter.schedule(() =>
+                  this.session.get(url, { headers }),
+                );
 
                 const contentType = String(response.headers["content-type"] || "");
                 if (!contentType.includes("application/atom+xml")) {
@@ -281,6 +296,19 @@ export class ArxivSearchService {
 
                 for (const entry of entryArray) {
                   if (articles.length >= max_results) break;
+
+                  // arXiv 错误响应：返回的 Atom entry 以 "Error" 为标题
+                  const entryTitle =
+                    (entry.title ?? entry["atom:title"] ?? entry["http://www.w3.org/2005/Atomtitle"]);
+                  if (typeof entryTitle === "string" && entryTitle.trim() === "Error") {
+                    const errorSummary =
+                      (entry.summary ?? entry["atom:summary"] ?? entry["http://www.w3.org/2005/Atomsummary"]);
+                    const errorMessage =
+                      typeof errorSummary === "string" ? errorSummary.trim() : entryTitle;
+                    this.logger.warn(`arXiv API 返回错误: ${errorMessage}`);
+                    break;
+                  }
+
                   const articleInfo = this.processArxivEntry(entry);
                   if (articleInfo) {
                     articles.push(articleInfo);
@@ -310,7 +338,7 @@ export class ArxivSearchService {
               }
             }
 
-            this.logger.error(`成功获取 ${articles.length} 篇 arXiv 文献`);
+            this.logger.info(`成功获取 ${articles.length} 篇 arXiv 文献`);
 
             return {
               articles,
@@ -336,7 +364,6 @@ export class ArxivSearchService {
               error: `网络请求错误: ${error.message}`,
             };
           }
-        });
       },
       24,
       use_cache,
