@@ -271,17 +271,6 @@ async function handleGetArticleDetails(
     );
   }
 
-  if (!["markdown", "xml", "text"].includes(args.format)) {
-    return structuredResult(
-      "get_article_details",
-      buildArticleDetailsErrorResult(
-        pmcidList.length || 1,
-        `无效的 format 参数: ${args.format}，有效值为: markdown, xml, text`,
-      ),
-      { success: false },
-    );
-  }
-
   if (!pmcidList.length) {
     return structuredResult("get_article_details", {
       total: 0,

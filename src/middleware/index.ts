@@ -18,6 +18,11 @@ export type ToolMiddleware = (
 export class CacheManager {
   private readonly cache = new Map<string, unknown>();
   private readonly cacheExpiry = new Map<string, number>();
+  private readonly maxSize: number;
+
+  constructor(maxSize = 1000) {
+    this.maxSize = maxSize;
+  }
 
   /**
    * 在缓存仍有效时返回缓存值，否则获取并写入新值。
@@ -72,7 +77,7 @@ export class CacheManager {
   }
 
   /**
-   * 存储值及其过期时间戳。
+   * 存储值及其过期时间戳。超过容量上限时优先淘汰已过期条目，其次淘汰最早过期条目。
    *
    * @param key 用于标识缓存值的缓存键。
    * @param value 要存储的值。
@@ -82,32 +87,93 @@ export class CacheManager {
   private set(key: string, value: unknown, cacheDurationHours: number, now: number): void {
     this.cache.set(key, value);
     this.cacheExpiry.set(key, now + cacheDurationHours * 60 * 60 * 1000);
+
+    if (this.cache.size > this.maxSize) {
+      this.evictExpired(now);
+    }
+
+    while (this.cache.size > this.maxSize) {
+      this.evictOldest();
+    }
+  }
+
+  /**
+   * 移除所有已过期的缓存条目。
+   *
+   * @param now 当前时间戳。
+   */
+  private evictExpired(now: number): void {
+    for (const [key, expiry] of this.cacheExpiry) {
+      if (expiry <= now) {
+        this.cache.delete(key);
+        this.cacheExpiry.delete(key);
+      }
+    }
+  }
+
+  /**
+   * 移除过期时间最早的缓存条目。
+   */
+  private evictOldest(): void {
+    let oldestKey: string | null = null;
+    let oldestExpiry = Infinity;
+
+    for (const [key, expiry] of this.cacheExpiry) {
+      if (expiry < oldestExpiry) {
+        oldestExpiry = expiry;
+        oldestKey = key;
+      }
+    }
+
+    if (oldestKey) {
+      this.cache.delete(oldestKey);
+      this.cacheExpiry.delete(oldestKey);
+    }
   }
 }
 
 export class RateLimiter {
   private queue: Promise<void> = Promise.resolve();
+  private pendingCount = 0;
+  private readonly maxPendingWarn = 100;
 
   public constructor(private readonly delayMs: number) {}
 
   /**
    * 在此前已调度任务之后运行任务，并在下一个任务前强制等待。
+   * 即使任务失败也会等待延迟，确保限速不被绕过。
    *
    * @param task 要在限速器下执行的任务。
    * @returns 任务执行结果。
    */
   public async schedule<T>(task: () => Promise<T>): Promise<T> {
-    const resultPromise = this.queue.then(async () => {
-      const result = await task();
-      await new Promise((resolve) => setTimeout(resolve, this.delayMs));
-      return result;
+    this.pendingCount++;
+    if (this.pendingCount > this.maxPendingWarn) {
+      console.error(
+        `[RateLimiter] 队列积压严重: ${this.pendingCount} 个待处理任务 (延迟 ${this.delayMs}ms)`,
+      );
+    }
+
+    const previousQueue = this.queue;
+
+    // 为调用方保留原始结果（成功或失败）
+    const resultPromise = previousQueue.then(async () => {
+      try {
+        return await task();
+      } finally {
+        this.pendingCount--;
+        // 无论成功或失败，都等待延迟以满足限速要求
+        await new Promise((resolve) => setTimeout(resolve, this.delayMs));
+      }
     });
 
+    // 队列链永不拒绝，确保后续任务不被阻塞
     this.queue = resultPromise.then(
       () => undefined,
       (error: unknown) => {
-        // 记录失败但继续处理后续任务，避免阻塞队列
-        console.error(`[RateLimiter] 任务执行失败: ${error instanceof Error ? error.message : String(error)}`);
+        console.error(
+          `[RateLimiter] 任务执行失败: ${error instanceof Error ? error.message : String(error)}`,
+        );
       },
     );
 

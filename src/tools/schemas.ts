@@ -366,7 +366,7 @@ export const GetArticleDetailsArgumentsSchema = z.object({
     .union([z.string(), z.array(z.string()), z.null()])
     .optional()
     .default(null),
-  format: z.string().default("markdown"),
+  format: z.enum(["markdown", "xml", "text"]).default("markdown"),
 });
 
 export const GetReferencesArgumentsSchema = z.object({
@@ -387,7 +387,10 @@ export const GetLiteratureRelationsArgumentsSchema = z.object({
     .optional()
     .default(null),
   id_type: z.enum(["auto", "doi", "pmid", "pmcid"]).default("auto"),
-  relation_types: z.array(z.string()).optional().default(["references", "similar", "citing"]),
+  relation_types: z
+    .array(z.enum(["references", "citing", "similar"]))
+    .optional()
+    .default(["references", "similar", "citing"]),
   max_results: z.number().int().positive().default(20),
   sources: z.array(z.string()).optional(),
   analysis_type: z.enum(["basic", "comprehensive", "network"]).default("basic"),

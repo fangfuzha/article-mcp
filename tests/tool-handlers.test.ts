@@ -425,20 +425,15 @@ describe("tool handlers", () => {
     expect(result.fulltext_stats).toBeNull();
   });
 
-  it("returns a friendly error object for invalid fulltext formats", async () => {
+  it("rejects invalid fulltext formats at the Zod schema level", async () => {
     const handlers = createToolHandlers(createMockServices());
-    const result = parseTextResult(
-      await handlers.get_article_details!({
+
+    await expect(
+      handlers.get_article_details!({
         pmcid: "PMC123",
         format: "invalid",
       }),
-    );
-
-    expect(result.total).toBe(1);
-    expect(result.successful).toBe(0);
-    expect(result.failed).toBe(1);
-    expect(result.articles).toEqual([]);
-    expect(result.error).toContain("无效的 format 参数");
+    ).rejects.toThrow(/markdown|xml|text/);
   });
 
   it("counts invalid PMCIDs as failed and warns", async () => {
