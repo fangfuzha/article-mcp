@@ -1,3 +1,6 @@
+/**
+ * 定义库的 tsup 打包入口、格式和构建输出选项。
+ */
 import { defineConfig } from "tsup";
 
 export default defineConfig({

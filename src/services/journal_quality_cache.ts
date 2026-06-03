@@ -1,3 +1,6 @@
+/**
+ * 持久化缓存期刊质量指标并处理过期、并发和降级读取。
+ */
 import { mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";

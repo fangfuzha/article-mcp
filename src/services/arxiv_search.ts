@@ -1,8 +1,6 @@
 /**
- * arXiv 文献搜索服务
- * 基于 arXiv API 的学术文献搜索功能
+ * 封装 arXiv API 检索、详情查询与结果规范化逻辑。
  */
-
 import axios, { type AxiosInstance } from "axios";
 import axiosRetry from "axios-retry";
 import { parseISO, format } from "date-fns";

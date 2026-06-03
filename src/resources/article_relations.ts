@@ -1,3 +1,6 @@
+/**
+ * 注册并解析文献关系资源 URI，复用工具处理器生成引用关系数据。
+ */
 import { ResourceTemplate, type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/sdk/types.js";
 

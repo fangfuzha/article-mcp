@@ -1,3 +1,6 @@
+/**
+ * 验证期刊质量工具的缓存命中、回退和刷新行为。
+ */
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

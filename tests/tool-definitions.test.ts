@@ -1,3 +1,6 @@
+/**
+ * 验证工具定义、语言选择和 Schema 元数据。
+ */
 import { describe, expect, it } from "vitest";
 
 import {

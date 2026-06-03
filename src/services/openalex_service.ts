@@ -1,7 +1,6 @@
 /**
- * OpenAlex API 服务 - 纯异步实现
+ * 封装 OpenAlex Works API，用于 DOI 查询、引用和相似文献检索。
  */
-
 import { defaultApiClient } from "../utils/api_utils.js";
 
 interface Author {

@@ -1,3 +1,6 @@
+/**
+ * 注册并解析文章全文资源 URI，按请求格式返回全文内容。
+ */
 import { ResourceTemplate, type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ReadResourceResult } from "@modelcontextprotocol/sdk/types.js";
 

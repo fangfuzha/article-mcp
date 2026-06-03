@@ -1,4 +1,7 @@
-﻿import { afterEach, describe, expect, it, vi } from "vitest";
+/**
+ * 验证 stdio 安全日志器不会向 stdout 输出日志。
+ */
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(() => {
   vi.restoreAllMocks();

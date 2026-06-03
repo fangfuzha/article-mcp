@@ -1,3 +1,6 @@
+/**
+ * 验证 CLI 参数解析、服务器信息输出和启动分支。
+ */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {

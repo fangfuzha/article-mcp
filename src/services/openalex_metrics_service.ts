@@ -1,3 +1,6 @@
+/**
+ * 通过 OpenAlex 获取期刊层面的引用、开放获取和主题指标。
+ */
 import { CacheManager } from "../middleware/index.js";
 import type { OpenAlexJournalMetrics } from "../types/journals.js";
 import { defaultApiClient } from "../utils/api_utils.js";

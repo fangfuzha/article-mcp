@@ -1,3 +1,6 @@
+/**
+ * 向 MCP 服务器注册 Article MCP 工具及运行时参数校验。
+ */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import {

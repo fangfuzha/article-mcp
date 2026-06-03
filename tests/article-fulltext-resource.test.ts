@@ -1,3 +1,6 @@
+/**
+ * 验证文章全文资源 URI 构建、解析和读取行为。
+ */
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it, vi } from "vitest";
 

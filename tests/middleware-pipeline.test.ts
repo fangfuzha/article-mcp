@@ -1,3 +1,6 @@
+/**
+ * 验证中间件管线、错误边界、日志和计时处理。
+ */
 import { describe, expect, it, vi } from "vitest";
 
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";

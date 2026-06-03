@@ -1,3 +1,6 @@
+/**
+ * 验证文献关系资源 URI 构建、解析和读取行为。
+ */
 import { describe, expect, it, vi } from "vitest";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 

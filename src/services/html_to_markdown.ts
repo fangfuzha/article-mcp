@@ -1,8 +1,5 @@
 /**
- * 将 HTML 或 XML 片段转换为 Markdown。
- *
- * @param htmlContent HTML 或 XML 字符串。
- * @returns 转换后的 Markdown；输入为空时返回 null。
+ * 将论文 HTML 片段转换为适合工具输出的 Markdown 文本。
  */
 export function htmlToMarkdown(htmlContent: string): string | null {
   if (!htmlContent) {

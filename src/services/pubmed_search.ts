@@ -1,3 +1,6 @@
+/**
+ * 封装 PubMed 与 PMC API，支持检索、详情、引用和全文解析。
+ */
 import { XMLParser } from "fast-xml-parser";
 
 import { convertPmcXmlToMarkdown, htmlToText } from "./html_to_markdown.js";

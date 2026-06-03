@@ -1,3 +1,6 @@
+/**
+ * 维护工具说明文案目录及默认中文描述导出。
+ */
 export type ToolDescriptionLanguage = "zh-CN" | "en";
 
 export const TOOL_DESCRIPTION_CATALOG = {

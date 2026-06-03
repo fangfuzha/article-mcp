@@ -1,3 +1,6 @@
+/**
+ * 提供带重试、超时和日志记录的统一 HTTP API 客户端。
+ */
 import axios from "axios";
 import type { AxiosInstance, AxiosResponse } from "axios";
 import axiosRetry from "axios-retry";

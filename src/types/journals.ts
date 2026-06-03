@@ -1,5 +1,5 @@
 /**
- * 期刊质量指标。
+ * 定义期刊质量、排名、OpenAlex 指标和缓存条目类型。
  */
 export type QualityMetrics = {
   [key: string]: unknown;

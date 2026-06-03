@@ -1,3 +1,6 @@
+/**
+ * 验证 PubMed/PMC 全文解析、格式化和错误处理。
+ */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PubMedService } from "../src/services/pubmed_search.js";

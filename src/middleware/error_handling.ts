@@ -1,9 +1,6 @@
 /**
- * MCP 标准错误处理中间件
- *
- * 对应 Python 版 middleware/__init__.py 中的 MCPErrorHandlingMiddleware。
+ * 提供符合 MCP 响应格式的错误处理中间件和标准错误包装器。
  */
-
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { ToolExecutionContext, ToolMiddleware, ToolNext } from "./index.js";

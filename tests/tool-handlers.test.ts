@@ -1,3 +1,6 @@
+/**
+ * 验证工具处理器的服务编排、结果格式和错误路径。
+ */
 import { describe, expect, it, vi } from "vitest";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 

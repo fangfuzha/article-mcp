@@ -1,3 +1,6 @@
+/**
+ * 封装 Europe PMC 检索、详情、引用、相似文献和全文获取能力。
+ */
 import { CacheManager, RateLimiter } from "../middleware/index.js";
 import type { ArticleDetailsResult, ArticleInfo, ArticleSearchResult } from "../types/articles.js";
 import { defaultApiClient } from "../utils/api_utils.js";

@@ -1,7 +1,5 @@
 /**
- * 文献基础数据模型。
- *
- * 字段名沿用 Python 版和 MCP 工具对外契约中的 snake_case 表示。
+ * 定义文章检索、详情、引用、相似文献和全文结果类型。
  */
 export type ArticleInfo = {
   pmid?: string | null;

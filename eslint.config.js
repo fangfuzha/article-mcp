@@ -1,3 +1,6 @@
+/**
+ * 配置 ESLint 忽略规则和 TypeScript 代码检查约束。
+ */
 import eslint from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";

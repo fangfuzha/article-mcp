@@ -1,3 +1,6 @@
+/**
+ * 管理持久化搜索缓存的读写、命中判断和过期清理。
+ */
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";

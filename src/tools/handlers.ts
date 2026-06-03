@@ -1,3 +1,6 @@
+/**
+ * 实现各 MCP 工具的业务处理逻辑与多数据源聚合。
+ */
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { ArticleMcpServices } from "../services/container.js";

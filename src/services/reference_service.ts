@@ -1,3 +1,6 @@
+/**
+ * 统一解析 DOI、PMID、PMCID，并汇总跨服务的文献关系查询。
+ */
 import { CrossRefService } from "./crossref_service.js";
 import { EuropePMCService } from "./europe_pmc.js";
 import { PubMedService } from "./pubmed_search.js";

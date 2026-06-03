@@ -1,3 +1,6 @@
+/**
+ * 定义 Article MCP 工具输入输出的 JSON Schema 与 Zod 形状。
+ */
 import { z } from "zod";
 
 import type { ToolDescriptionLanguage } from "./descriptions.js";

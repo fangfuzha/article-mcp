@@ -1,3 +1,6 @@
+/**
+ * 集中注册 Article MCP 暴露的所有资源。
+ */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import type { ArticleMcpServices } from "../services/container.js";

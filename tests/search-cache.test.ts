@@ -1,3 +1,6 @@
+/**
+ * 验证搜索缓存的持久化、过期、清理和禁用场景。
+ */
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

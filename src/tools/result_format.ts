@@ -1,3 +1,6 @@
+/**
+ * 统一构造结构化工具成功结果与错误结果。
+ */
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 export type ArticleMcpStructuredEnvelope = {

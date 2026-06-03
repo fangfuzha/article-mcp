@@ -1,3 +1,6 @@
+/**
+ * 在 npm 打包前后切换仓库 README 与发布用 README。
+ */
 import { access, copyFile, readFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";

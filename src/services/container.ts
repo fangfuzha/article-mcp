@@ -1,3 +1,6 @@
+/**
+ * 构建并注入 Article MCP 各服务实例及共享依赖。
+ */
 import { ArxivSearchService } from "./arxiv_search.js";
 import { CrossRefService } from "./crossref_service.js";
 import { EasyScholarService } from "./easyscholar_service.js";

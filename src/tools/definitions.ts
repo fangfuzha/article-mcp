@@ -1,3 +1,6 @@
+/**
+ * 生成 Article MCP 工具定义，包含标题、描述、输入和输出 Schema。
+ */
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 
 import { TOOL_DESCRIPTION_CATALOG, type ToolDescriptionLanguage } from "./descriptions.js";

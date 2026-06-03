@@ -1,3 +1,6 @@
+/**
+ * 验证期刊质量结果按指定指标排序的行为。
+ */
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { describe, expect, it, vi } from "vitest";
 

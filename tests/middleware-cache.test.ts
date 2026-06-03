@@ -1,3 +1,6 @@
+/**
+ * 验证工具执行缓存管理器的启用、禁用和键控行为。
+ */
 import { describe, expect, it } from "vitest";
 
 import { CacheManager } from "../src/middleware/index.js";

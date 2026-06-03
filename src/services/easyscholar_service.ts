@@ -1,14 +1,6 @@
-/** * EasyScholar API 服务
- *
- * EasyScholar 是一个中国学术期刊评级服务，提供：
- * - 期刊影响因子
- * - JCI (Journal Citation Index)
- * - 中科院分区
- * - 期刊排名
- *
- * 官方 API 文档: https://www.easyscholar.cc/open/getPublicationRank
+/**
+ * 对接 EasyScholar 接口以获取期刊分区、影响因子等质量指标。
  */
-
 import axios, { AxiosError } from "axios";
 
 import type { JournalQualityResponse, QualityMetrics, RankingInfo } from "../types/journals.js";

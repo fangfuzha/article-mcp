@@ -1,7 +1,6 @@
 /**
- * CrossRef API 服务 - 纯异步实现
+ * 封装 Crossref API 的 DOI 解析、元数据查询与参考文献获取。
  */
-
 type JsonValue = any;
 
 import { defaultApiClient } from "../utils/api_utils.js";

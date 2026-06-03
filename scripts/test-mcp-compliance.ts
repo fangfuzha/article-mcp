@@ -1,3 +1,6 @@
+/**
+ * 通过 stdio 客户端执行 MCP 协议兼容性冒烟检查并生成报告。
+ */
 import { access } from "node:fs/promises";
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
