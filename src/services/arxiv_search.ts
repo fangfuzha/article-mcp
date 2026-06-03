@@ -1,5 +1,5 @@
 /**
- * 封装 arXiv API 检索、详情查询与结果规范化逻辑。
+ * 封装 arXiv API 关键词检索与结果规范化逻辑。
  */
 import axios, { type AxiosInstance } from "axios";
 import axiosRetry from "axios-retry";

@@ -1,5 +1,5 @@
 /**
- * 定义工具执行管线、缓存、限流、日志、计时和错误边界中间件。
+ * 定义工具执行管线、CacheManager、RateLimiter、日志和计时中间件。
  */
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 

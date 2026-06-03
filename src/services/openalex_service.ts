@@ -1,5 +1,5 @@
 /**
- * 封装 OpenAlex Works API，用于 DOI 查询、引用和相似文献检索。
+ * 封装 OpenAlex Works API，用于文献搜索、DOI 详情查询和施引文献检索。
  */
 import { defaultApiClient } from "../utils/api_utils.js";
 import { addOpenAlexAuthParams, normalizeDoiIdentifier } from "../utils/service_identity.js";

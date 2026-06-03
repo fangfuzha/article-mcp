@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 创建 Article MCP 服务器、注册工具和资源，并提供 CLI 入口。
+ * 创建 Article MCP 服务器、注册 MCP 工具，并提供 CLI 入口。
  */
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";

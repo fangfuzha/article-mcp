@@ -1,5 +1,5 @@
 /**
- * Shared helpers for optional scholarly API identification parameters.
+ * 提供各学术 API 的可选身份认证参数构建辅助函数（NCBI、OpenAlex、Crossref、Semantic Scholar）。
  */
 
 const DEFAULT_TOOL_NAME = "Article-MCP";
