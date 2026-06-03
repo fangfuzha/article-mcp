@@ -8,9 +8,9 @@ Article MCP 是一个基于 [Model Context Protocol (MCP)](https://modelcontextp
 ## 功能特性
 
 - 🔍 **多源文献搜索** - 支持 Europe PMC、PubMed、arXiv、CrossRef、OpenAlex
-- 📄 **文献详情获取** - 获取全文内容，支持 Markdown/XML/Text 格式，并提供 `article://fulltext/{pmcid}?format={format}&sections={sections}` 资源链接
+- 📄 **文献详情获取** - 获取全文内容，支持 Markdown/XML/Text 格式，结果由 tool 直接返回
 - 📚 **参考文献获取** - 智能去重，多数据源合并
-- 🔗 **文献关系分析** - 引用网络、相似文献发现，并提供 `article://relations/{identifier}{?id_type,relation_types,analysis_type,max_results,max_depth,sources}` 资源链接
+- 🔗 **文献关系分析** - 引用网络、相似文献发现，结果由 tool 直接返回
 - 📊 **期刊质量评估** - 影响因子、分区、JCI 指标
 
 ## 快速开始
@@ -58,8 +58,8 @@ article-mcp
 
 - 工具返回的机器可读结果使用统一的 `structuredContent` 包装。
 - `content` 仅保留摘要和关键摘录，不再承载完整 JSON。
-- `get_article_details` 的全文通过 `article://fulltext/{pmcid}?format={format}&sections={sections}` 资源按需读取；资源失败会返回结构化 JSON 错误。
-- `get_literature_relations` 的关系分析通过 `article://relations/{identifier}{?id_type,relation_types,analysis_type,max_results,max_depth,sources}` 资源按需重算；资源失败会返回结构化 JSON 错误。
+- `get_article_details` 通过 tool 结构化结果直接返回全文预览、格式、章节匹配和截断信息。
+- `get_literature_relations` 通过 tool 结构化结果直接返回引用、相似文献、施引文献和网络分析数据。
 
 ## 环境变量
 

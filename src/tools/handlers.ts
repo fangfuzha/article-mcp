@@ -6,8 +6,6 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { ArticleMcpServices } from "../services/container.js";
 import { SearchCache } from "../middleware/search_cache.js";
 import { JournalQualityCache } from "../services/journal_quality_cache.js";
-import { buildArticleFulltextResourceUri } from "../resources/article_fulltext.js";
-import { buildArticleRelationsResourceUri } from "../resources/article_relations.js";
 import type { ArticleMcpToolName } from "./definitions.js";
 import {
   GetArticleDetailsArgumentsSchema,
@@ -305,15 +303,10 @@ async function handleGetArticleDetails(
       let fulltextFetched = false;
       if (fulltext.fulltext_available) {
         const content = selectFulltextContent(fulltext, args.format);
-        const resourceUri = buildArticleFulltextResourceUri(normalizedPmcid, {
-          format: args.format,
-          ...(sectionList ? { sections: sectionList } : {}),
-        });
         const preview = truncatePreview(String(content ?? ""), FULLTEXT_PREVIEW_LIMIT);
         (article as unknown as Record<string, unknown>).fulltext = {
           format: args.format,
           content: preview,
-          resource_uri: resourceUri,
           truncated: String(content ?? "").length > preview.length,
           fulltext_available: true,
           ...(fulltext.sections_requested
@@ -591,35 +584,19 @@ function structuredResult(
 }
 
 function buildArticleDetailsMeta(articles: unknown[]): Record<string, unknown> {
-  const resourceLinks = articles
-    .filter(isRecord)
-    .map((article) => {
-      const fulltext = isRecord(article.fulltext) ? article.fulltext : null;
-      const resourceUri = typeof fulltext?.resource_uri === "string" ? fulltext.resource_uri : null;
-      if (!resourceUri) {
-        return null;
-      }
-
-      return {
-        type: "fulltext",
-        pmcid: String(article.pmcid ?? article.pmc_id ?? "").trim() || null,
-        format: typeof fulltext?.format === "string" ? fulltext.format : null,
-        resource_uri: resourceUri,
-        truncated: Boolean(fulltext?.truncated),
-      };
-    })
-    .filter(Boolean);
-
-  const truncatedCount = resourceLinks.filter(
-    (link) => isRecord(link) && link.truncated === true,
-  ).length;
+  const articlesWithFulltext = articles.filter(
+    (article) => isRecord(article) && isRecord(article.fulltext),
+  );
+  const truncatedCount = articlesWithFulltext.filter((article) => {
+    const fulltext = isRecord(article) && isRecord(article.fulltext) ? article.fulltext : null;
+    return fulltext?.truncated === true;
+  }).length;
 
   return {
-    resource_links: resourceLinks,
     truncation: {
       preview_limit: FULLTEXT_PREVIEW_LIMIT,
       total_articles: articles.length,
-      articles_with_resources: resourceLinks.length,
+      articles_with_fulltext: articlesWithFulltext.length,
       truncated_articles: truncatedCount,
     },
   };
@@ -642,22 +619,7 @@ function buildRelationMeta(
       ? [finalIdentifiers]
       : [];
 
-  const resourceLinks = identifiers.map((identifier) => ({
-    type: "relations",
-    identifier,
-    resource_uri: buildArticleRelationsResourceUri({
-      identifier,
-      idType: args.id_type,
-      relationTypes: args.relation_types,
-      analysisType: args.analysis_type,
-      maxResults: args.max_results,
-      maxDepth: args.max_depth,
-      ...(args.sources ? { sources: args.sources } : {}),
-    }),
-  }));
-
   return {
-    resource_links: resourceLinks,
     truncation: {
       total_identifiers: identifiers.length,
       relation_types: args.relation_types,

@@ -155,9 +155,9 @@ The current version exposes 5 read-only tools:
 | Tool                       | Purpose                                                                                                                                                  | Main Parameters                                                                                                   |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `search_literature`        | Multi-source literature search                                                                                                                           | `keyword`, `sources`, `max_results`, `search_type`, `use_cache`                                                   |
-| `get_article_details`      | Full-text article retrieval with `article://fulltext/{pmcid}?format={format}&sections={sections}` resource links                                         | `pmcid`, `sections`, `format`                                                                                     |
+| `get_article_details`      | Full-text article retrieval with direct tool output                                                                                                      | `pmcid`, `sections`, `format`                                                                                     |
 | `get_references`           | Reference retrieval                                                                                                                                      | `identifier`, `id_type`, `sources`, `max_results`, `include_metadata`                                             |
-| `get_literature_relations` | Literature relation analysis with `article://relations/{identifier}{?id_type,relation_types,analysis_type,max_results,max_depth,sources}` resource links | `identifier` / `identifiers`, `id_type`, `relation_types`, `max_results`, `sources`, `analysis_type`, `max_depth` |
+| `get_literature_relations` | Literature relation analysis with direct tool output                                                                                                     | `identifier` / `identifiers`, `id_type`, `relation_types`, `max_results`, `sources`, `analysis_type`, `max_depth` |
 | `get_journal_quality`      | Journal quality evaluation with automatic OpenAlex-only fallback when EasyScholar is unavailable                                                         | `journal_name`, `include_metrics`, `use_cache`, `sort_by`, `sort_order`                                           |
 
 ## Output Contract
@@ -166,9 +166,9 @@ Tool calls now return both machine-readable `structuredContent` and human/LLM-fa
 
 - `structuredContent` uses a unified `{ success, data, meta, warnings, error }` envelope.
 - `content` now holds only summaries and key excerpts, not the full JSON payload.
-- `get_article_details` exposes full text on demand through the `article://fulltext/{pmcid}?format={format}&sections={sections}` resource URI.
-- `get_literature_relations` exposes relation analysis on demand through the `article://relations/{identifier}{?id_type,relation_types,analysis_type,max_results,max_depth,sources}` resource URI.
-- Resource reads are re-fetched on demand and return structured JSON errors on failure.
+- `get_article_details` returns full-text previews, format metadata, section matching, and truncation metadata directly in the tool result.
+- `get_literature_relations` returns references, similar articles, citing articles, and optional network analysis directly in the tool result.
+- The server intentionally exposes tools only; MCP Resources and Prompts are not registered for broader agent compatibility.
 
 ## Cache Notes
 
@@ -218,7 +218,7 @@ The migration keeps strong parameter compatibility so that different MCP clients
 
 - `get_article_details.pmcid` supports a single value or a list
 - `get_article_details.sections` supports a single value, a list, or null
-- `get_article_details` full-text resources use `article://fulltext/{pmcid}?format={format}&sections={sections}`
+- `get_article_details` full-text output is returned directly by the tool
 - `get_literature_relations` supports both `identifier` and `identifiers`
 - `get_journal_quality.journal_name` and `get_journal_quality.include_metrics` support single values or lists
 

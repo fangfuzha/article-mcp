@@ -26,6 +26,54 @@ const expectedTools = [
   "get_journal_quality",
 ];
 
+async function listResourceTemplateUris(client: Client): Promise<string[]> {
+  try {
+    const templatesResult = await client.listResourceTemplates();
+    return templatesResult.resourceTemplates.map((template) => template.uriTemplate);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message.includes("Method not found") || error.message.includes("-32601"))
+    ) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
+async function listResourceUris(client: Client): Promise<string[]> {
+  try {
+    const resourcesResult = await client.listResources();
+    return resourcesResult.resources.map((resource) => resource.uri);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message.includes("Method not found") || error.message.includes("-32601"))
+    ) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
+async function listPromptNames(client: Client): Promise<string[]> {
+  try {
+    const promptsResult = await client.listPrompts();
+    return promptsResult.prompts.map((prompt) => prompt.name);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message.includes("Method not found") || error.message.includes("-32601"))
+    ) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
 /**
  * 递归查找缺少 items 定义的数组 schema。
  *
@@ -78,20 +126,15 @@ async function runComplianceChecks(): Promise<{ checks: ComplianceCheck[]; score
   try {
     const version = client.getServerVersion();
     const toolsResult = await client.listTools();
-    const templatesResult = await client.listResourceTemplates();
     const toolNames = toolsResult.tools.map((tool) => tool.name);
-    const resourceTemplateUris = templatesResult.resourceTemplates.map(
-      (template) => template.uriTemplate,
-    );
+    const resourceUris = await listResourceUris(client);
+    const resourceTemplateUris = await listResourceTemplateUris(client);
+    const promptNames = await listPromptNames(client);
     const missingTools = expectedTools.filter((toolName) => !toolNames.includes(toolName));
     const missingArrayItems: string[] = [];
     const missingOutputSchemas = toolsResult.tools
       .filter((tool) => !tool.outputSchema)
       .map((tool) => tool.name);
-    const missingResourceTemplates = [
-      "article://fulltext/{pmcid}{?format,sections}",
-      "article://relations/{identifier}{?id_type,relation_types,analysis_type,max_results,max_depth,sources}",
-    ].filter((uriTemplate) => !resourceTemplateUris.includes(uriTemplate));
 
     for (const tool of toolsResult.tools) {
       collectMissingArrayItems(tool.inputSchema, tool.name, missingArrayItems);
@@ -153,11 +196,21 @@ async function runComplianceChecks(): Promise<{ checks: ComplianceCheck[]; score
           : "all tools expose structured output schemas",
       },
       {
-        name: "resource templates",
-        passed: missingResourceTemplates.length === 0,
-        details: missingResourceTemplates.length
-          ? `missing=${missingResourceTemplates.join(", ")}`
-          : `registered=${resourceTemplateUris.join(", ")}`,
+        name: "resource templates disabled",
+        passed: resourceTemplateUris.length === 0,
+        details: resourceTemplateUris.length
+          ? `registered=${resourceTemplateUris.join(", ")}`
+          : "no resource templates registered",
+      },
+      {
+        name: "resources disabled",
+        passed: resourceUris.length === 0,
+        details: resourceUris.length ? `registered=${resourceUris.join(", ")}` : "no resources registered",
+      },
+      {
+        name: "prompts disabled",
+        passed: promptNames.length === 0,
+        details: promptNames.length ? `registered=${promptNames.join(", ")}` : "no prompts registered",
       },
       {
         name: "structured call envelope",

@@ -318,22 +318,14 @@ describe("tool handlers", () => {
       format: "text",
       content: "Methods Text body",
       sections_requested: ["methods"],
-      resource_uri: "article://fulltext/PMC123?format=text&sections=methods",
       truncated: false,
     });
-    expect(result.meta.resource_links).toEqual([
-      {
-        type: "fulltext",
-        pmcid: "PMC123",
-        format: "text",
-        resource_uri: "article://fulltext/PMC123?format=text&sections=methods",
-        truncated: false,
-      },
-    ]);
+    expect(result.articles[0].fulltext).not.toHaveProperty("resource_uri");
+    expect(result.meta).not.toHaveProperty("resource_links");
     expect(result.meta.truncation).toMatchObject({
       preview_limit: expect.any(Number),
       total_articles: 1,
-      articles_with_resources: 1,
+      articles_with_fulltext: 1,
       truncated_articles: 0,
     });
   });
@@ -350,12 +342,10 @@ describe("tool handlers", () => {
     expect(result.articles[0].fulltext).toMatchObject({
       format: "markdown",
       content: "## Methods\n\nMarkdown body",
-      resource_uri: "article://fulltext/PMC123?format=markdown",
       truncated: false,
     });
-    expect(result.meta.resource_links[0].resource_uri).toBe(
-      "article://fulltext/PMC123?format=markdown",
-    );
+    expect(result.articles[0].fulltext).not.toHaveProperty("resource_uri");
+    expect(result.meta).not.toHaveProperty("resource_links");
     expect(result.articles[0].fulltext).not.toHaveProperty("fulltext_xml");
     expect(result.articles[0].fulltext).not.toHaveProperty("fulltext_text");
   });
@@ -373,9 +363,9 @@ describe("tool handlers", () => {
     expect(result.articles[0].fulltext).toMatchObject({
       format: "xml",
       content: "<body><sec><title>Methods</title><p>XML body</p></sec></body>",
-      resource_uri: "article://fulltext/PMC123?format=xml",
       truncated: false,
     });
+    expect(result.articles[0].fulltext).not.toHaveProperty("resource_uri");
     expect(result.meta.truncation.truncated_articles).toBe(0);
     expect(result.articles[0].fulltext).not.toHaveProperty("fulltext_markdown");
     expect(result.articles[0].fulltext).not.toHaveProperty("fulltext_text");
