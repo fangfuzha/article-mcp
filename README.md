@@ -100,7 +100,7 @@ article-mcp
 
 通过 PMCID 获取全文内容。仅支持 PMC 开放获取文章。
 
-Return shape: `fulltext.content` contains the complete body in the selected format, `fulltext.preview` is a 1200-character quick preview, and `fulltext.content_length` reports the complete body length.
+返回说明：`fulltext.content` 返回所选格式的完整正文；`fulltext.preview` 是用于快速浏览的 1200 字符预览；`fulltext.content_length` 标识完整正文长度。
 
 | 参数       | 类型                       | 默认值     | 说明                                            |
 | ---------- | -------------------------- | ---------- | ----------------------------------------------- |
@@ -124,7 +124,7 @@ Return shape: `fulltext.content` contains the complete body in the selected form
 
 分析文献间的引用关系、施引文献和相似文献。
 
-Citing behavior: `citing` tries OpenAlex and Europe PMC by default. If `sources` is provided, only supported citing sources from that list (`openalex`, `europe_pmc`) are used. OpenAlex requires `OPENALEX_API_KEY`; Europe PMC acts as a fallback source.
+施引说明：`citing` 默认同时尝试 OpenAlex 与 Europe PMC；如果显式传入 `sources`，则只使用其中支持施引的 `openalex`/`europe_pmc`。OpenAlex 路径需要 `OPENALEX_API_KEY`，Europe PMC 可作为备选来源。
 
 | 参数             | 类型               | 默认值                              | 说明                                                            |
 | ---------------- | ------------------ | ----------------------------------- | --------------------------------------------------------------- |
@@ -139,7 +139,7 @@ Citing behavior: `citing` tries OpenAlex and Europe PMC by default. If `sources`
 
 集成 EasyScholar + OpenAlex 双数据源。
 
-Failure behavior: if neither EasyScholar nor OpenAlex returns usable metrics, the tool returns `isError: true` with a clear error instead of a successful empty metric object.
+失败说明：当 EasyScholar 与 OpenAlex 都无法返回任何可用指标时，工具会返回 `isError: true` 和明确错误信息，而不是成功返回空指标。
 
 | 参数              | 类型                       | 默认值 | 说明                                                       |
 | ----------------- | -------------------------- | ------ | ---------------------------------------------------------- |
