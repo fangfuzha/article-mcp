@@ -2,6 +2,39 @@
 
 本文档记录 Article MCP Node 迁移版的主要变更。
 
+## 0.3.0 - 2026-06-04
+
+### 新增
+
+- `EuropePMCService.getCitationsAsync`：通过 Europe PMC citations endpoint 获取施引文献，作为施引数据的备选来源。
+- Semantic Scholar 施引结果新增 `citation_contexts`、`citation_intents`、`is_influential_citation` 字段，提供引用上下文。
+- OpenAlex 搜索和施引查询支持 `maxResults > 200` 时自动分页（`per_page` 按需请求）。
+- `OpenAlexService.getCitationsAsync` 新增 24 小时缓存支持。
+- `search_literature` 新增 `failed_sources` 和 `invalid_sources` 字段，报告失败和无效的数据源。
+
+### 修复
+
+- arXiv API 由 HTTP 改为 HTTPS，避免每次请求经过 301 重定向。
+- arXiv 错误响应（`title="Error"`）不再被解析为有效文献条目。
+- `search_literature` 单个数据源失败不再阻塞其他源，改为「尽力而为」语义。
+- `get_journal_quality` 缓存命中时不再错误过滤掉 OpenAlex 指标。
+- `CrossRefService`、`OpenAlexService`、`OpenAlexMetricsService` 改用注入的 stdio-safe logger，不再直接写 console。
+- 修正多处 `error` 级别日志为 `info` 级别（正常操作日志）。
+
+### 优化
+
+- `CacheManager` 增加 1000 条容量上限，超出时淘汰过期/最旧条目，防止长时间运行内存无界增长。
+- `RateLimiter` 任务失败时也等待延迟（防止绕过限速），并新增队列积压告警。
+- `SearchCache` 改为原子写入（写临时文件再 rename），防止并发读取损坏。
+- `format`、`relation_types` 参数改用 Zod enum 校验，提前拦截无效输入。
+- NCBI `tool` 参数与 npm 包名统一为 `article-mcp`。
+- 修正多处模块注释，确保准确描述实际功能。
+- README 全面改版，对齐 MCP 社区文档规范：新增适用范围、VS Code 配置、调试章节、使用示例和数据源能力矩阵。
+
+### 验证
+
+- `npm run test:all` 全部通过（91/91 测试，MCP 合规 100/100）。
+
 ## 0.2.6 - 2026-06-03
 
 ### 变更

@@ -1,6 +1,6 @@
 {
   "name": "article-mcp",
-  "version": "0.2.6",
+  "version": "0.3.0",
   "description": "Article MCP文献搜索服务器 - Node.js implementation",
   "type": "module",
   "main": "dist/index.js",
