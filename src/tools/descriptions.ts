@@ -10,6 +10,8 @@ export const TOOL_DESCRIPTION_CATALOG = {
 ⚠️ 此工具只返回元数据（标题、作者、摘要、PMCID等），不包含全文内容。
    如需获取全文，请使用返回结果中的 pmcid 调用"文献全文"工具。
 
+配置提示：OpenAlex 源需要 OPENALEX_API_KEY；未配置时 OpenAlex 源会失败，但 Europe PMC、PubMed、arXiv、CrossRef 等其他源仍会尽力返回。
+
 搜索策略：
 - comprehensive: 全面搜索，使用所有可用数据源（并集）
 - fast: 快速搜索，只使用主要数据源（Europe PMC、PubMed）
@@ -19,7 +21,7 @@ export const TOOL_DESCRIPTION_CATALOG = {
 主要参数：
 - keyword: 搜索关键词（必填）
 - sources: 数据源列表（可选，默认根据搜索策略自动选择）
-- max_results: 每个源的最大结果数（默认10）
+- max_results: 每个源的最大结果数（默认10，范围1-100）
 - search_type: 搜索策略（默认comprehensive）
 - use_cache: 是否使用24小时缓存（默认true）
 
@@ -75,7 +77,7 @@ export const TOOL_DESCRIPTION_CATALOG = {
 - identifier: 文献标识符（必填）：DOI、PMID、PMCID
 - id_type: 标识符类型（默认doi）：auto/doi/pmid/pmcid
 - sources: 数据源列表（默认["europe_pmc", "crossref", "pubmed"]）
-- max_results: 最大参考文献数量（默认20，建议20-100）
+- max_results: 最大参考文献数量（默认20，范围1-100）
 - include_metadata: 是否包含详细元数据（默认true）
 
 支持的数据源：Europe PMC、CrossRef、PubMed
@@ -87,11 +89,13 @@ export const TOOL_DESCRIPTION_CATALOG = {
 - similar: 相似文献
 - citing: 引用该文献的文献
 
+Configuration note: citing tries OpenAlex and Europe PMC by default; when sources is provided, only supported citing sources from that list (openalex/europe_pmc) are used. OpenAlex requires OPENALEX_API_KEY, while Europe PMC can act as a fallback source.
+
 主要参数：
 - identifiers: 文献标识符（单个或列表）：DOI、PMID、PMCID
 - id_type: 标识符类型（默认auto）：auto/doi/pmid/pmcid
 - relation_types: 关系类型列表（默认全部）：["references", "similar", "citing"]
-- max_results: 每种关系类型最大结果数（默认20）
+- max_results: 每种关系类型最大结果数（默认20，范围1-100）
 - analysis_type: 分析类型（默认basic）：basic/comprehensive/network
 - max_depth: 分析深度（默认1）
 
@@ -104,6 +108,8 @@ export const TOOL_DESCRIPTION_CATALOG = {
 支持的指标：
 EasyScholar 提供：impact_factor（影响因子）、five_year_impact_factor（5年影响因子）、quartile（SCI分区 Q1-Q4）、jci（JCI指数）、cas_zone（中科院分区）、cas_zone_top（TOP期刊标识）
 OpenAlex 提供：h_index（h指数）、citation_rate（2年引用率）、cited_by_count（总引用数）、works_count（总文章数）、i10_index（i10指数）
+
+配置提示：EasyScholar 指标需要 EASYSCHOLAR_SECRET_KEY；OpenAlex 指标需要 OPENALEX_API_KEY。缺少任一配置时会自动降级到可用数据源，可能返回空指标或警告。
 
 主要参数：
 - journal_name: 期刊名称（单个或列表）
@@ -125,10 +131,12 @@ Search strategies:
 - precise: Search authoritative sources, PubMed and Europe PMC, and merge by intersection.
 - preprint: Search preprints from arXiv.
 
+Configuration note: the OpenAlex source requires OPENALEX_API_KEY. Without it, OpenAlex fails clearly while Europe PMC, PubMed, arXiv, and CrossRef still return best-effort results.
+
 Main parameters:
 - keyword: Search keyword (required).
 - sources: Optional source list; defaults are selected by search strategy.
-- max_results: Maximum results per source, default 10.
+- max_results: Maximum results per source, default 10, range 1-100.
 - search_type: Search strategy, default comprehensive.
 - use_cache: Whether to use the 24-hour cache, default true.`,
     get_article_details: `Fetch article full text by PMCID.
@@ -147,7 +155,7 @@ Main parameters:
 - identifier: Article identifier, required. Supports DOI, PMID, and PMCID.
 - id_type: Identifier type, default doi. Supports auto, doi, pmid, and pmcid.
 - sources: Source list, default Europe PMC, CrossRef, and PubMed.
-- max_results: Maximum references to return, default 20.
+- max_results: Maximum references to return, default 20, range 1-100.
 - include_metadata: Whether to include detailed metadata, default true.
 
 Supported sources: Europe PMC, CrossRef, and PubMed. References are deduplicated by DOI first, then by title, and sorted by source priority.`,
@@ -158,11 +166,13 @@ Relation types:
 - similar: Similar articles.
 - citing: Articles that cite the article.
 
+Configuration note: citing relationships try OpenAlex and Europe PMC by default; when sources is provided, only supported citing sources from that list (openalex/europe_pmc) are used. OpenAlex requires OPENALEX_API_KEY, while Europe PMC can act as a fallback source.
+
 Main parameters:
 - identifiers: One identifier or a list of identifiers. Supports DOI, PMID, and PMCID.
 - id_type: Identifier type, default auto. Supports auto, doi, pmid, and pmcid.
 - relation_types: Relation type list, default references, similar, and citing.
-- max_results: Maximum results per relation type, default 20.
+- max_results: Maximum results per relation type, default 20, range 1-100.
 - analysis_type: Analysis type, default basic. Supports basic, comprehensive, and network.
 - max_depth: Analysis depth, default 1.`,
     get_journal_quality: `Evaluate journal quality and impact metrics with EasyScholar and OpenAlex.
@@ -170,6 +180,8 @@ Main parameters:
 Supported metrics:
 - EasyScholar: impact_factor, five_year_impact_factor, quartile, jci, cas_zone, and cas_zone_top.
 - OpenAlex: h_index, citation_rate, cited_by_count, works_count, and i10_index.
+
+Configuration note: EasyScholar metrics require EASYSCHOLAR_SECRET_KEY, and OpenAlex metrics require OPENALEX_API_KEY. Missing keys degrade to whichever source is available and may return empty metrics or warnings.
 
 Main parameters:
 - journal_name: Journal name, single value or list.

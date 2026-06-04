@@ -161,7 +161,7 @@ async function runComplianceChecks(): Promise<{ checks: ComplianceCheck[]; score
     const checks: ComplianceCheck[] = [
       {
         name: "server metadata",
-        passed: version?.name === "Article MCP Server" && Boolean(version.version),
+        passed: version?.name === "article-mcp" && Boolean(version.version),
         details: JSON.stringify(version),
       },
       {
@@ -205,12 +205,16 @@ async function runComplianceChecks(): Promise<{ checks: ComplianceCheck[]; score
       {
         name: "resources disabled",
         passed: resourceUris.length === 0,
-        details: resourceUris.length ? `registered=${resourceUris.join(", ")}` : "no resources registered",
+        details: resourceUris.length
+          ? `registered=${resourceUris.join(", ")}`
+          : "no resources registered",
       },
       {
         name: "prompts disabled",
         passed: promptNames.length === 0,
-        details: promptNames.length ? `registered=${promptNames.join(", ")}` : "no prompts registered",
+        details: promptNames.length
+          ? `registered=${promptNames.join(", ")}`
+          : "no prompts registered",
       },
       {
         name: "structured call envelope",

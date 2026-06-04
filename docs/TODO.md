@@ -4,6 +4,8 @@
 
 Python 到 Node 的**基础迁移已经完成**。当前 Node 版已经具备可运行的 MCP stdio 服务、5 个核心工具、工程化脚本、测试和发布配置，可以作为 Python 版的可用替代实现。
 
+**主要用途**：当前实现主要面向学术文献与科研论文检索分析，尤其适合医学、生命科学和跨学科科研场景，同时覆盖 arXiv 等通用科研预印本来源。
+
 当前 Node 版已通过 `format:check`、`version:check`、`typecheck`、`lint`、`build`、`vitest` 和 `test:mcp`，MCP 合规检查分数为 `100/100`。入口、工具层、服务层和工程化配套均已落地；当前服务器保持 Tools-only 形态，不注册 MCP Resources 或 Prompts。
 
 当前已找不到明确的 P0/P1 行为缺口；后续工作主要是持续回归补测、外部 API 兼容性观察和按实际用户反馈进行小步优化。

@@ -21,7 +21,6 @@ export type ToolHandlerMap = Record<string, ToolHandler>;
 
 type SearchStrategy = {
   defaultSources: string[];
-  maxResultsPerSource: number;
   mergeStrategy: "union" | "intersection";
 };
 
@@ -35,7 +34,6 @@ const FULLTEXT_PREVIEW_LIMIT = 1200;
 
 const DEFAULT_SEARCH_STRATEGY: SearchStrategy = {
   defaultSources: ["europe_pmc", "pubmed", "arxiv", "crossref", "openalex"],
-  maxResultsPerSource: 10,
   mergeStrategy: "union",
 };
 
@@ -43,17 +41,14 @@ const SEARCH_STRATEGIES: Record<string, SearchStrategy> = {
   comprehensive: DEFAULT_SEARCH_STRATEGY,
   fast: {
     defaultSources: ["europe_pmc", "pubmed"],
-    maxResultsPerSource: 5,
     mergeStrategy: "union",
   },
   precise: {
     defaultSources: ["pubmed", "europe_pmc"],
-    maxResultsPerSource: 10,
     mergeStrategy: "intersection",
   },
   preprint: {
     defaultSources: ["arxiv"],
-    maxResultsPerSource: 10,
     mergeStrategy: "union",
   },
 };
@@ -100,13 +95,13 @@ async function handleSearchLiterature(
   const args = SearchLiteratureArgumentsSchema.parse(toolArguments);
   const strategy = SEARCH_STRATEGIES[args.search_type] ?? DEFAULT_SEARCH_STRATEGY;
   const validSources = ["europe_pmc", "pubmed", "arxiv", "crossref", "openalex"] as const;
-  const sources = (args.sources?.length ? args.sources : strategy.defaultSources).filter(
-    (source) => validSources.includes(source as (typeof validSources)[number]),
+  const sources = (args.sources?.length ? args.sources : strategy.defaultSources).filter((source) =>
+    validSources.includes(source as (typeof validSources)[number]),
   );
   const invalidSources = (args.sources?.length ? args.sources : []).filter(
     (source) => !validSources.includes(source as (typeof validSources)[number]),
   );
-  const maxResultsPerSource = Math.min(args.max_results, strategy.maxResultsPerSource);
+  const maxResultsPerSource = args.max_results;
 
   // 文件缓存层（Python SearchCache 等价）
   let cacheKey: string | undefined;
@@ -234,7 +229,7 @@ async function handleSearchLiterature(
   };
 
   // 保存到文件缓存
-  if (searchCache && cacheKey) {
+  if (searchCache && cacheKey && failedSources.length === 0) {
     await searchCache.set(cacheKey, result);
   }
 
@@ -318,11 +313,14 @@ async function handleGetArticleDetails(
       let fulltextFetched = false;
       if (fulltext.fulltext_available) {
         const content = selectFulltextContent(fulltext, args.format);
-        const preview = truncatePreview(String(content ?? ""), FULLTEXT_PREVIEW_LIMIT);
+        const contentText = String(content ?? "");
+        const preview = truncatePreview(contentText, FULLTEXT_PREVIEW_LIMIT);
         (article as unknown as Record<string, unknown>).fulltext = {
           format: args.format,
-          content: preview,
-          truncated: String(content ?? "").length > preview.length,
+          content: contentText,
+          preview,
+          truncated: false,
+          content_length: contentText.length,
           fulltext_available: true,
           ...(fulltext.sections_requested
             ? {
@@ -393,6 +391,19 @@ async function handleGetLiteratureRelations(
       ? [finalIdentifiers]
       : [];
 
+  if (identifiers.length === 0) {
+    return structuredResult("get_literature_relations", {
+      success: false,
+      identifier: finalIdentifiers,
+      id_type: args.id_type,
+      relation_types: args.relation_types,
+      analysis_type: args.analysis_type,
+      relations: [],
+      statistics: { total_relations: 0 },
+      error: "get_literature_relations requires identifier or identifiers.",
+    });
+  }
+
   const relations = await Promise.all(
     identifiers.slice(0, 20).map(async (identifier) => {
       const idType = args.id_type === "auto" ? extractIdentifierType(identifier) : args.id_type;
@@ -421,11 +432,18 @@ async function handleGetLiteratureRelations(
       }
 
       if (args.relation_types.includes("citing") && doiIdentifier) {
-        const citations = await services.openalex.getCitationsAsync(
+        const citingResult = await fetchCitingArticles(
+          services,
+          identifier,
+          idType,
           doiIdentifier,
           args.max_results,
+          args.sources,
         );
-        relationResult.citing = citations.citations || [];
+        relationResult.citing = citingResult.citations;
+        if (citingResult.failedSources.length) {
+          relationResult.citing_failed_sources = citingResult.failedSources;
+        }
       }
 
       if (args.relation_types.includes("similar")) {
@@ -534,7 +552,10 @@ async function handleGetJournalQuality(
       const cachedOpenAlexKeys =
         !openalexMetrics &&
         OPENALEX_JOURNAL_METRIC_KEYS.some(
-          (key) => easyScholarMetrics[key] !== null && easyScholarMetrics[key] !== undefined && easyScholarMetrics[key] !== "",
+          (key) =>
+            easyScholarMetrics[key] !== null &&
+            easyScholarMetrics[key] !== undefined &&
+            easyScholarMetrics[key] !== "",
         );
       const hasOpenAlexMetrics =
         hasJournalMetricValues(resolvedOpenAlexMetrics, ["source"]) || cachedOpenAlexKeys;
@@ -552,8 +573,22 @@ async function handleGetJournalQuality(
         },
         includeMetrics,
       );
+      const hasFilteredMetrics = hasJournalMetricValues(qualityMetrics);
+
+      if (!hasFilteredMetrics) {
+        return {
+          success: false,
+          journal_name: journalName,
+          quality_metrics: {},
+          ranking_info: resolvedEasyScholarResult.ranking_info,
+          data_source: null,
+          include_metrics: includeMetrics,
+          error: buildJournalQualityUnavailableError(resolvedEasyScholarResult.error),
+        };
+      }
 
       return {
+        success: true,
         journal_name: journalName,
         quality_metrics: qualityMetrics,
         ranking_info: resolvedEasyScholarResult.ranking_info,
@@ -592,7 +627,7 @@ function structuredResult(
   const summary = buildSummary(toolName, payload);
   const success = options.success ?? determineSuccess(payload);
 
-  return createStructuredToolResult(
+  const result = createStructuredToolResult(
     {
       success,
       data: payload,
@@ -602,6 +637,8 @@ function structuredResult(
     summary,
     buildExcerpts(toolName, payload),
   );
+
+  return success ? result : { ...result, isError: true };
 }
 
 function buildArticleDetailsMeta(articles: unknown[]): Record<string, unknown> {
@@ -1353,18 +1390,21 @@ async function expandRelationBranch(
   }
 
   if (current.relationType === "citing") {
-    if (sources?.length && !sources.includes("openalex")) {
-      return [];
-    }
-
     const resolved = await resolveArticleIdentifiers(services, current.identifier, current.idType);
     const doi = resolved.doi ?? (current.idType === "doi" ? current.identifier : null);
     if (!doi) {
       return [];
     }
 
-    const citations = await services.openalex.getCitationsAsync(doi, maxResults);
-    return Array.isArray(citations.citations) ? citations.citations : [];
+    const citingResult = await fetchCitingArticles(
+      services,
+      current.identifier,
+      current.idType,
+      doi,
+      maxResults,
+      sources,
+    );
+    return citingResult.citations;
   }
 
   if (sources?.length && !sources.includes("pubmed")) {
@@ -1445,6 +1485,94 @@ function relationExpansionTarget(
   }
 
   return null;
+}
+
+async function fetchCitingArticles(
+  services: ArticleMcpServices,
+  identifier: string,
+  idType: string,
+  doi: string,
+  maxResults: number,
+  sources?: string[],
+): Promise<{
+  citations: unknown[];
+  failedSources: Array<{ source: string; error: string }>;
+}> {
+  const requestedSources = (sources?.length ? sources : ["openalex", "europe_pmc"]).filter(
+    (source) => ["openalex", "europe_pmc"].includes(source),
+  );
+  const citationsBySource: Record<string, unknown[]> = {};
+  const failedSources: Array<{ source: string; error: string }> = [];
+
+  await Promise.all(
+    requestedSources.map(async (source) => {
+      try {
+        let result: Record<string, unknown> | null = null;
+
+        if (source === "openalex") {
+          result = (await services.openalex.getCitationsAsync(
+            doi,
+            maxResults,
+          )) as unknown as Record<string, unknown>;
+        } else {
+          const europePmc = services.europePmc as unknown as {
+            getCitationsAsync?: (
+              identifier: string,
+              idType?: string,
+              maxResults?: number,
+            ) => Promise<Record<string, unknown>>;
+          };
+          if (!europePmc.getCitationsAsync) {
+            return;
+          }
+          result = await europePmc.getCitationsAsync(identifier, idType, maxResults);
+        }
+
+        if (result?.success === false) {
+          failedSources.push({
+            source,
+            error:
+              typeof result.error === "string" ? result.error : `${source} citing lookup failed`,
+          });
+          return;
+        }
+
+        citationsBySource[source] = Array.isArray(result?.citations) ? result.citations : [];
+      } catch (error) {
+        failedSources.push({
+          source,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }),
+  );
+
+  return {
+    citations: mergeRelationItems(citationsBySource).slice(0, maxResults),
+    failedSources,
+  };
+}
+
+function mergeRelationItems(itemsBySource: Record<string, unknown[]>): unknown[] {
+  const seen = new Set<string>();
+  const merged: unknown[] = [];
+
+  for (const [source, items] of Object.entries(itemsBySource)) {
+    for (const item of items) {
+      const article = isRecord(item) ? { source, ...item } : item;
+      const key = isRecord(article)
+        ? (relationNodeId(article) ?? JSON.stringify(article))
+        : JSON.stringify(article);
+      const normalizedKey = key.toLowerCase();
+      if (seen.has(normalizedKey)) {
+        continue;
+      }
+      seen.add(normalizedKey);
+      merged.push(article);
+    }
+  }
+
+  return merged;
 }
 
 function relationNodeId(item: Record<string, unknown>): string | null {
@@ -1547,6 +1675,15 @@ function buildJournalQualityFallbackWarning(error: unknown): string {
   }
 
   return "EasyScholar 不可用，当前仅返回 OpenAlex 指标。";
+}
+
+function buildJournalQualityUnavailableError(error: unknown): string {
+  const normalizedError = typeof error === "string" ? error.trim() : "";
+  if (normalizedError) {
+    return `No journal quality metrics are available. EasyScholar error: ${normalizedError}`;
+  }
+
+  return "No journal quality metrics are available from EasyScholar or OpenAlex.";
 }
 
 function sortJournalResults<T extends { quality_metrics: Record<string, unknown> }>(

@@ -15,7 +15,7 @@ import { JournalQualityCache } from "../services/journal_quality_cache.js";
 import { createToolDefinitions, type ArticleMcpToolName } from "./definitions.js";
 import { createToolHandlers } from "./handlers.js";
 import {
-  ArticleMcpOutputZodShape,
+  ArticleMcpOutputZodShapes,
   GetArticleDetailsArgumentsSchema,
   GetJournalQualityArgumentsSchema,
   GetLiteratureRelationsArgumentsSchema,
@@ -65,7 +65,7 @@ export function registerArticleMcpTools(
         description: tool.description,
         annotations: tool.annotations,
         inputSchema: TOOL_RUNTIME_SCHEMAS[toolName],
-        outputSchema: ArticleMcpOutputZodShape,
+        outputSchema: ArticleMcpOutputZodShapes[toolName],
       },
       async (toolArguments: unknown) =>
         pipeline.execute(toolName, toolArguments, async (context) => {

@@ -25,6 +25,8 @@ const nullableStringOrStringArraySchema = {
   anyOf: [{ type: "string" }, stringArraySchema, { type: "null" }],
 } as const;
 
+export const MAX_TOOL_RESULTS = 100;
+
 export const SearchLiteratureInputSchema: ToolInputSchema = {
   type: "object",
   properties: {
@@ -40,6 +42,7 @@ export const SearchLiteratureInputSchema: ToolInputSchema = {
       type: "integer",
       default: 10,
       minimum: 1,
+      maximum: MAX_TOOL_RESULTS,
       description: "每个源的最大结果数（默认10）",
     },
     search_type: {
@@ -103,6 +106,7 @@ export const GetReferencesInputSchema: ToolInputSchema = {
       type: "integer",
       default: 20,
       minimum: 1,
+      maximum: MAX_TOOL_RESULTS,
       description: "最大参考文献数量（默认20，建议20-100）",
     },
     include_metadata: {
@@ -143,6 +147,7 @@ export const GetLiteratureRelationsInputSchema: ToolInputSchema = {
       type: "integer",
       default: 20,
       minimum: 1,
+      maximum: MAX_TOOL_RESULTS,
       description: "每种关系类型最大结果数（默认20）",
     },
     sources: {
@@ -241,6 +246,89 @@ export const ArticleMcpOutputZodShape = {
   meta: z.record(z.string(), z.unknown()).describe("Operational metadata for the response."),
   warnings: z.array(z.string()).optional().describe("Optional warning messages."),
   error: z.string().nullable().optional().describe("Error message when success is false."),
+} as const;
+
+const articleMcpOutputEnvelope = (dataSchema: z.ZodTypeAny) =>
+  ({
+    success: z.boolean().describe("Whether the tool invocation succeeded."),
+    data: z
+      .union([dataSchema, z.null()])
+      .describe("Tool-specific response payload, or null for middleware-level errors."),
+    meta: z.record(z.string(), z.unknown()).describe("Operational metadata for the response."),
+    warnings: z.array(z.string()).optional().describe("Optional warning messages."),
+    error: z.string().nullable().optional().describe("Error message when success is false."),
+  }) as const;
+
+const looseRecord = z.record(z.string(), z.unknown());
+
+export const ArticleMcpOutputZodShapes = {
+  search_literature: articleMcpOutputEnvelope(
+    z
+      .object({
+        keyword: z.string(),
+        sources_used: z.array(z.string()),
+        results_by_source: z.record(z.string(), z.array(z.unknown())),
+        merged_results: z.array(z.unknown()),
+        total_count: z.number(),
+        search_type: z.string(),
+        cache_enabled: z.boolean(),
+      })
+      .passthrough(),
+  ),
+  get_article_details: articleMcpOutputEnvelope(
+    z
+      .object({
+        total: z.number(),
+        successful: z.number(),
+        failed: z.number(),
+        articles: z.array(z.unknown()),
+        fulltext_stats: z.unknown().nullable(),
+      })
+      .passthrough(),
+  ),
+  get_references: articleMcpOutputEnvelope(
+    z
+      .object({
+        identifier: z.string(),
+        id_type: z.string(),
+        resolved_identifier: looseRecord,
+        sources_used: z.array(z.string()),
+        references_by_source: looseRecord,
+        merged_references: z.array(z.unknown()),
+        total_count: z.number(),
+      })
+      .passthrough(),
+  ),
+  get_literature_relations: articleMcpOutputEnvelope(
+    z
+      .object({
+        identifier: z.union([z.string(), z.array(z.string()), z.null()]).optional(),
+        id_type: z.string(),
+        relation_types: z.array(z.string()),
+        analysis_type: z.string(),
+        relations: z.array(z.unknown()),
+        statistics: looseRecord,
+      })
+      .passthrough(),
+  ),
+  get_journal_quality: articleMcpOutputEnvelope(
+    z
+      .union([
+        z
+          .object({
+            journal_name: z.string(),
+            quality_metrics: looseRecord,
+          })
+          .passthrough(),
+        z
+          .object({
+            journal_results: z.array(z.unknown()),
+            sort_info: z.unknown().nullable(),
+          })
+          .passthrough(),
+      ])
+      .describe("Single journal quality result or batch result."),
+  ),
 } as const;
 
 const EN_INPUT_SCHEMA_DESCRIPTIONS: Record<keyof ToolInputSchemaMap, Record<string, string>> = {
@@ -355,7 +443,7 @@ function localizeToolInputSchema(
 export const SearchLiteratureArgumentsSchema = z.object({
   keyword: z.string(),
   sources: z.array(z.string()).optional(),
-  max_results: z.number().int().positive().default(10),
+  max_results: z.number().int().positive().max(MAX_TOOL_RESULTS).default(10),
   search_type: z.enum(["comprehensive", "fast", "precise", "preprint"]).default("comprehensive"),
   use_cache: z.boolean().default(true),
 });
@@ -373,7 +461,7 @@ export const GetReferencesArgumentsSchema = z.object({
   identifier: z.string(),
   id_type: z.enum(["auto", "doi", "pmid", "pmcid"]).default("doi"),
   sources: z.array(z.string()).optional(),
-  max_results: z.number().int().positive().default(20),
+  max_results: z.number().int().positive().max(MAX_TOOL_RESULTS).default(20),
   include_metadata: z.boolean().default(true),
 });
 
@@ -391,7 +479,7 @@ export const GetLiteratureRelationsArgumentsSchema = z.object({
     .array(z.enum(["references", "citing", "similar"]))
     .optional()
     .default(["references", "similar", "citing"]),
-  max_results: z.number().int().positive().default(20),
+  max_results: z.number().int().positive().max(MAX_TOOL_RESULTS).default(20),
   sources: z.array(z.string()).optional(),
   analysis_type: z.enum(["basic", "comprehensive", "network"]).default("basic"),
   max_depth: z.number().int().positive().default(1),

@@ -76,7 +76,7 @@ export function createToolDefinitions(env: ToolDescriptionEnvironment = process.
       annotations: {
         title: titles.search_literature,
         readOnlyHint: true,
-        openWorldHint: false,
+        openWorldHint: true,
       },
     },
     {
@@ -86,7 +86,7 @@ export function createToolDefinitions(env: ToolDescriptionEnvironment = process.
       annotations: {
         title: titles.get_article_details,
         readOnlyHint: true,
-        openWorldHint: false,
+        openWorldHint: true,
       },
     },
     {
@@ -96,7 +96,7 @@ export function createToolDefinitions(env: ToolDescriptionEnvironment = process.
       annotations: {
         title: titles.get_references,
         readOnlyHint: true,
-        openWorldHint: false,
+        openWorldHint: true,
       },
     },
     {
@@ -106,7 +106,7 @@ export function createToolDefinitions(env: ToolDescriptionEnvironment = process.
       annotations: {
         title: titles.get_literature_relations,
         readOnlyHint: true,
-        openWorldHint: false,
+        openWorldHint: true,
       },
     },
     {
@@ -116,7 +116,7 @@ export function createToolDefinitions(env: ToolDescriptionEnvironment = process.
       annotations: {
         title: titles.get_journal_quality,
         readOnlyHint: true,
-        openWorldHint: false,
+        openWorldHint: true,
       },
     },
   ] as const satisfies readonly Tool[];

@@ -1,10 +1,14 @@
 /**
  * 通过 OpenAlex 获取期刊层面的引用、开放获取和主题指标。
  */
-import { CacheManager } from "../middleware/index.js";
+import { CacheManager, RateLimiter } from "../middleware/index.js";
 import type { OpenAlexJournalMetrics } from "../types/journals.js";
 import { defaultApiClient } from "../utils/api_utils.js";
-import { addOpenAlexAuthParams } from "../utils/service_identity.js";
+import {
+  addOpenAlexAuthParams,
+  getOpenAlexApiKey,
+  getOpenAlexMissingApiKeyMessage,
+} from "../utils/service_identity.js";
 import { stdioSafeLogger } from "../utils/stdio_safe_logger.js";
 
 /**
@@ -13,6 +17,7 @@ import { stdioSafeLogger } from "../utils/stdio_safe_logger.js";
 export class OpenAlexMetricsService {
   private readonly baseUrl = "https://api.openalex.org/sources";
   private readonly cacheManager = new CacheManager();
+  private readonly rateLimiter = new RateLimiter(this.resolveRateLimitDelayMs());
 
   constructor(private readonly logger: Pick<Console, "error" | "warn"> = stdioSafeLogger) {}
 
@@ -32,9 +37,13 @@ export class OpenAlexMetricsService {
       return null;
     }
 
+    if (!getOpenAlexApiKey()) {
+      this.logger.warn(getOpenAlexMissingApiKeyMessage());
+      return null;
+    }
+
     const fetchMetrics = async (): Promise<OpenAlexJournalMetrics | null> => {
-      const data = await defaultApiClient.getJson<any>(
-        this.baseUrl,
+      const data = await this.openAlexGetJson<any>(
         addOpenAlexAuthParams({
           search: trimmedName,
           filter: "type:journal",
@@ -98,6 +107,19 @@ export class OpenAlexMetricsService {
       .replace(/[^\p{L}\p{N}]+/gu, " ")
       .replace(/\s+/g, " ")
       .trim();
+  }
+
+  private resolveRateLimitDelayMs(): number {
+    const configured = Number(process.env.OPENALEX_RATE_LIMIT_MS);
+    if (Number.isFinite(configured) && configured >= 0) {
+      return configured;
+    }
+
+    return process.env.NODE_ENV === "test" ? 0 : 100;
+  }
+
+  private async openAlexGetJson<T>(params: Record<string, unknown>): Promise<T> {
+    return this.rateLimiter.schedule(() => defaultApiClient.getJson<T>(this.baseUrl, params));
   }
 
   /**

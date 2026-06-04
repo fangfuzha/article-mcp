@@ -2,9 +2,14 @@
  * 封装 OpenAlex Works API，用于文献搜索、DOI 详情查询和施引文献检索。
  */
 import { defaultApiClient } from "../utils/api_utils.js";
-import { addOpenAlexAuthParams, normalizeDoiIdentifier } from "../utils/service_identity.js";
+import {
+  addOpenAlexAuthParams,
+  getOpenAlexApiKey,
+  getOpenAlexMissingApiKeyMessage,
+  normalizeDoiIdentifier,
+} from "../utils/service_identity.js";
 import { stdioSafeLogger } from "../utils/stdio_safe_logger.js";
-import { CacheManager } from "../middleware/index.js";
+import { CacheManager, RateLimiter } from "../middleware/index.js";
 
 interface Author {
   display_name: string;
@@ -74,9 +79,11 @@ export class OpenAlexService {
   private baseUrl = "https://api.openalex.org";
   private userAgent = "Article-MCP/2.0";
   private cacheManager: CacheManager;
+  private rateLimiter: RateLimiter;
 
   constructor(private readonly logger: Pick<Console, "error" | "warn"> = stdioSafeLogger) {
     this.cacheManager = new CacheManager();
+    this.rateLimiter = new RateLimiter(this.resolveRateLimitDelayMs());
   }
 
   /**
@@ -94,6 +101,10 @@ export class OpenAlexService {
       cacheKey,
       async () => {
         try {
+          if (!this.requireOpenAlexApiKey()) {
+            return this.buildMissingApiKeySearchResponse();
+          }
+
           const allArticles: JsonRecord[] = [];
           let totalCount = 0;
           let page = 1;
@@ -119,7 +130,7 @@ export class OpenAlexService {
               Accept: "application/json",
             };
 
-            const data = await defaultApiClient.get(url, params, headers);
+            const data = await this.openAlexGet<any>(url, params, headers);
             const results = data.results || [];
             totalCount = data.meta?.count || 0;
 
@@ -159,6 +170,16 @@ export class OpenAlexService {
    */
   async getWorkByDoiAsync(doi: string): Promise<WorkByDoiResponse> {
     try {
+      const missingApiKeyMessage = this.missingApiKeyMessage();
+      if (missingApiKeyMessage) {
+        return {
+          success: false,
+          article: null,
+          source: "openalex",
+          error: missingApiKeyMessage,
+        };
+      }
+
       const work = await this.fetchWorkByDoiAsync(doi);
       if (work) {
         return {
@@ -206,6 +227,17 @@ export class OpenAlexService {
       cacheKey,
       async () => {
         try {
+          const missingApiKeyMessage = this.missingApiKeyMessage();
+          if (missingApiKeyMessage) {
+            return {
+              success: false,
+              citations: [],
+              total_count: 0,
+              source: "openalex",
+              error: missingApiKeyMessage,
+            };
+          }
+
           const openalex_id = await this.findOpenAlexIdByDoiAsync(doi);
           if (!openalex_id) {
             this.logger.warn(`无法找到DOI ${doi} 对应的OpenAlex ID`);
@@ -239,7 +271,7 @@ export class OpenAlexService {
               Accept: "application/json",
             };
 
-            const data = await defaultApiClient.get(url, params, headers);
+            const data = await this.openAlexGet<any>(url, params, headers);
             const results = data.results || [];
             totalCount = data.meta?.count || 0;
 
@@ -302,7 +334,48 @@ export class OpenAlexService {
       "User-Agent": this.userAgent,
       Accept: "application/json",
     };
-    return defaultApiClient.get<Work>(url, addOpenAlexAuthParams({ select }), headers);
+    return this.openAlexGet<Work>(url, addOpenAlexAuthParams({ select }), headers);
+  }
+
+  private resolveRateLimitDelayMs(): number {
+    const configured = Number(process.env.OPENALEX_RATE_LIMIT_MS);
+    if (Number.isFinite(configured) && configured >= 0) {
+      return configured;
+    }
+
+    return process.env.NODE_ENV === "test" ? 0 : 100;
+  }
+
+  private missingApiKeyMessage(): string | null {
+    if (getOpenAlexApiKey()) {
+      return null;
+    }
+
+    const message = getOpenAlexMissingApiKeyMessage();
+    this.logger.warn(message);
+    return message;
+  }
+
+  private requireOpenAlexApiKey(): boolean {
+    return this.missingApiKeyMessage() === null;
+  }
+
+  private buildMissingApiKeySearchResponse(): SearchWorkResponse {
+    return {
+      success: false,
+      articles: [],
+      total_count: 0,
+      source: "openalex",
+      error: getOpenAlexMissingApiKeyMessage(),
+    };
+  }
+
+  private async openAlexGet<T>(
+    url: string,
+    params?: Record<string, unknown>,
+    headers?: Record<string, string>,
+  ): Promise<T> {
+    return this.rateLimiter.schedule(() => defaultApiClient.get<T>(url, params, headers));
   }
 
   private normalizeDoiForOpenAlex(doi: string): string {

@@ -16,6 +16,7 @@ import { defaultApiClient } from "../utils/api_utils.js";
 import {
   buildNcbiParams,
   buildSemanticScholarHeaders,
+  firstConfiguredValue,
   normalizeDoiIdentifier,
 } from "../utils/service_identity.js";
 import { stdioSafeLogger } from "../utils/stdio_safe_logger.js";
@@ -300,7 +301,12 @@ export class PubMedService {
     pmid: string,
     email?: string,
     maxResults = 20,
-  ): Promise<{ referenced_articles: ArticleInfo[]; total_count?: number; error?: string; message?: string }> {
+  ): Promise<{
+    referenced_articles: ArticleInfo[];
+    total_count?: number;
+    error?: string;
+    message?: string;
+  }> {
     try {
       if (!pmid || !/^\d+$/.test(pmid)) {
         return { referenced_articles: [], error: "Invalid PMID" };
@@ -651,9 +657,9 @@ export class PubMedService {
 
     try {
       this.logger.info(`Batch query ${dois.length} DOIs`);
-      const pmids = (
-        await Promise.all(dois.map((doi) => this.findPmidByDoiAsync(doi)))
-      ).filter((pmid): pmid is string => Boolean(pmid));
+      const pmids = (await Promise.all(dois.map((doi) => this.findPmidByDoiAsync(doi)))).filter(
+        (pmid): pmid is string => Boolean(pmid),
+      );
       if (!pmids.length) {
         return [];
       }
@@ -705,7 +711,11 @@ export class PubMedService {
       return configured;
     }
 
-    return process.env.NODE_ENV === "test" ? 0 : 333;
+    if (process.env.NODE_ENV === "test") {
+      return 0;
+    }
+
+    return firstConfiguredValue("NCBI_API_KEY", "ENTREZ_API_KEY") ? 100 : 333;
   }
 
   private async ncbiGetText(
@@ -1008,4 +1018,3 @@ export class PubMedService {
 export function createPubMedService(logger?: Console): PubMedService {
   return new PubMedService(logger);
 }
-

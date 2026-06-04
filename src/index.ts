@@ -16,7 +16,7 @@ import { registerArticleMcpTools } from "./tools/index.js";
 
 config();
 
-export const SERVER_NAME = "Article MCP Server";
+export const SERVER_NAME = "article-mcp";
 export const SERVER_VERSION = "0.3.0";
 export const CORE_TOOL_NAMES = [
   "search_literature",
@@ -102,7 +102,7 @@ export function parseCliArguments(argv: string[]): ParsedCliArguments {
  */
 export function formatServerInfo(): string {
   return [
-    `${SERVER_NAME} v${SERVER_VERSION}`,
+    `Article MCP Server (${SERVER_NAME}) v${SERVER_VERSION}`,
     "Node.js + TypeScript MCP migration focused on the stdio transport.",
     "Core tools:",
     ...CORE_TOOL_NAMES.map((toolName, index) => `${index + 1}. ${toolName}`),

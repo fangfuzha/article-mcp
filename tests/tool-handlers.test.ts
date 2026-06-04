@@ -3,10 +3,12 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
 
 import type { ArticleMcpServices } from "../src/services/container.js";
 import { UnifiedReferenceService } from "../src/services/reference_service.js";
 import { createToolHandlers } from "../src/tools/handlers.js";
+import { ArticleMcpOutputZodShapes } from "../src/tools/schemas.js";
 
 function parseTextResult(result: CallToolResult): Record<string, any> {
   if (result.structuredContent && typeof result.structuredContent === "object") {
@@ -63,6 +65,12 @@ function createMockServices(): ArticleMcpServices {
           },
         ],
         total_count: 1,
+        source: "europe_pmc",
+      }),
+      getCitationsAsync: async () => ({
+        success: true,
+        citations: [],
+        total_count: 0,
         source: "europe_pmc",
       }),
       searchBatchDoiAsync: async () => [
@@ -228,6 +236,63 @@ describe("tool handlers", () => {
     }
   });
 
+  it("allows middleware error envelopes to satisfy per-tool output schemas", () => {
+    for (const outputShape of Object.values(ArticleMcpOutputZodShapes)) {
+      expect(() =>
+        z.object(outputShape).parse({
+          success: false,
+          data: null,
+          meta: { error_type: "ZodError" },
+          error: "Invalid input",
+        }),
+      ).not.toThrow();
+    }
+  });
+
+  it("passes requested max_results through search strategies", async () => {
+    const calls: number[] = [];
+    const services = createMockServices();
+    services.europePmc.searchAsync = async (_keyword, _start, _end, _email, maxResults) => {
+      calls.push(Number(maxResults));
+      return { articles: [], total_count: 0 };
+    };
+
+    const handlers = createToolHandlers(services);
+    await handlers.search_literature!({
+      keyword: "strategy cap",
+      search_type: "fast",
+      sources: ["europe_pmc"],
+      max_results: 20,
+    });
+
+    expect(calls).toEqual([20]);
+  });
+
+  it("does not cache degraded search results with failed sources", async () => {
+    const services = createMockServices();
+    services.openalex.searchWorksAsync = async () => {
+      throw new Error("temporary openalex outage");
+    };
+    const cache = {
+      get: vi.fn(async () => null),
+      set: vi.fn(async () => undefined),
+    };
+
+    const handlers = createToolHandlers(services, cache as any);
+    const result = parseTextResult(
+      await handlers.search_literature!({
+        keyword: "degraded",
+        sources: ["europe_pmc", "openalex"],
+        max_results: 5,
+      }),
+    );
+
+    expect(result.failed_sources).toEqual([
+      { source: "openalex", error: "temporary openalex outage" },
+    ]);
+    expect(cache.set).not.toHaveBeenCalled();
+  });
+
   it("applies precise search strategy as intersection merge", async () => {
     const handlers = createToolHandlers(createMockServices());
     const result = parseTextResult(
@@ -371,6 +436,33 @@ describe("tool handlers", () => {
     expect(result.meta).not.toHaveProperty("resource_links");
     expect(result.articles[0].fulltext).not.toHaveProperty("fulltext_xml");
     expect(result.articles[0].fulltext).not.toHaveProperty("fulltext_text");
+  });
+
+  it("returns full text content while keeping a bounded preview", async () => {
+    const services = createMockServices();
+    const longContent = "A".repeat(1500);
+    services.pubmed.getPMCFulltextHtmlAsync = async () => ({
+      pmc_id: "PMC123",
+      fulltext_markdown: longContent,
+      fulltext_xml: `<body>${longContent}</body>`,
+      fulltext_text: longContent,
+      fulltext_available: true,
+    });
+
+    const handlers = createToolHandlers(services);
+    const result = parseTextResult(
+      await handlers.get_article_details!({
+        pmcid: "PMC123",
+      }),
+    );
+
+    expect(result.articles[0].fulltext.content).toHaveLength(1500);
+    expect(result.articles[0].fulltext.preview.length).toBeLessThan(
+      result.articles[0].fulltext.content.length,
+    );
+    expect(result.articles[0].fulltext.preview).toContain("已截断");
+    expect(result.articles[0].fulltext.truncated).toBe(false);
+    expect(result.articles[0].fulltext.content_length).toBe(1500);
   });
 
   it("returns xml fulltext content when requested", async () => {
@@ -568,13 +660,13 @@ describe("tool handlers", () => {
 
   it("returns a friendly error when the reference identifier is empty", async () => {
     const handlers = createToolHandlers(createMockServices());
-    const result = parseTextResult(
-      await handlers.get_references!({
-        identifier: "   ",
-        id_type: "doi",
-      }),
-    );
+    const toolResult = await handlers.get_references!({
+      identifier: "   ",
+      id_type: "doi",
+    });
+    const result = parseTextResult(toolResult);
 
+    expect(toolResult.isError).toBe(true);
     expect(result.success).toBe(false);
     expect(result.error).toContain("文献标识符不能为空");
     expect(result.total_count).toBe(0);
@@ -768,6 +860,47 @@ describe("tool handlers", () => {
     expect(result.relations[0]).toHaveProperty("references");
     expect(result.relations[0].similar).toHaveLength(1);
     expect(result.relations[0]).not.toHaveProperty("citing");
+  });
+
+  it("rejects literature relation requests without identifiers", async () => {
+    const handlers = createToolHandlers(createMockServices());
+    const result = await handlers.get_literature_relations!({
+      relation_types: ["references"],
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      success: false,
+      data: {
+        relations: [],
+        error: "get_literature_relations requires identifier or identifiers.",
+      },
+    });
+  });
+
+  it("honors Europe PMC as a selected citing source", async () => {
+    const services = createMockServices();
+    const openAlexSpy = vi.spyOn(services.openalex, "getCitationsAsync");
+    services.europePmc.getCitationsAsync = async (identifier: string, idType: string) => ({
+      success: true,
+      citations: [{ title: "Europe citing", doi: "10.1000/europe-citing", identifier, idType }],
+      total_count: 1,
+      source: "europe_pmc",
+    });
+
+    const handlers = createToolHandlers(services);
+    const result = parseTextResult(
+      await handlers.get_literature_relations!({
+        identifiers: "10.1000/source",
+        relation_types: ["citing"],
+        sources: ["europe_pmc"],
+      }),
+    );
+
+    expect(openAlexSpy).not.toHaveBeenCalled();
+    expect(result.relations[0].citing).toEqual([
+      expect.objectContaining({ title: "Europe citing", source: "europe_pmc" }),
+    ]);
   });
 
   it("reuses the unified reference service for relation reference analysis", async () => {
@@ -1024,5 +1157,41 @@ describe("tool handlers", () => {
     ).toEqual(["Nature", "Science"]);
     expect(result.journal_results[0].quality_metrics).toEqual({ impact_factor: 64 });
     expect(result.sort_info).toEqual({ field: "impact_factor", order: "desc" });
+  });
+
+  it("marks journal quality as failed when no metrics are available", async () => {
+    const services = createMockServices();
+    services.easyscholar.getJournalQuality = async (journalName: string) => ({
+      success: false,
+      journal_name: journalName,
+      quality_metrics: {},
+      ranking_info: {
+        rank_in_category: 0,
+        total_journals_in_category: 0,
+        percentile: 0,
+        assessment_method: "unavailable",
+        confidence: "low",
+      },
+      data_source: null,
+      error: "missing EasyScholar key",
+    });
+    services.openalexMetrics.getJournalMetrics = async () => null;
+
+    const handlers = createToolHandlers(services);
+    const result = await handlers.get_journal_quality!({
+      journal_name: "Unknown Journal",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      success: false,
+      data: {
+        success: false,
+        journal_name: "Unknown Journal",
+        quality_metrics: {},
+        error:
+          "No journal quality metrics are available. EasyScholar error: missing EasyScholar key",
+      },
+    });
   });
 });

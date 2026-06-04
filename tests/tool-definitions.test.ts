@@ -47,6 +47,7 @@ describe("tool definitions", () => {
   it("keeps all tools read-only and schema-backed", () => {
     for (const tool of TOOL_DEFINITIONS) {
       expect(tool.annotations?.readOnlyHint).toBe(true);
+      expect(tool.annotations?.openWorldHint).toBe(true);
       expect(tool.inputSchema.type).toBe("object");
       expect(tool.inputSchema.properties).toBeTruthy();
     }
@@ -60,6 +61,16 @@ describe("tool definitions", () => {
     }
 
     expect(missing).toEqual([]);
+  });
+
+  it("declares bounded max_results values for tools that page external APIs", () => {
+    for (const toolName of ["search_literature", "get_references", "get_literature_relations"]) {
+      const tool = TOOL_DEFINITIONS.find((item) => item.name === toolName);
+      expect(tool?.inputSchema.properties.max_results).toMatchObject({
+        minimum: 1,
+        maximum: 100,
+      });
+    }
   });
 
   it("uses Chinese tool explanations by default", () => {

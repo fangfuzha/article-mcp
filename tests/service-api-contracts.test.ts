@@ -174,7 +174,9 @@ describe("external API contract alignment", () => {
     const result = await pubmed.getCitingArticlesAsync("123456", undefined, 5);
 
     const firstCall = getJsonSpy.mock.calls[0]!;
-    expect(firstCall[0]).toBe("https://api.semanticscholar.org/graph/v1/paper/PMID:123456/citations");
+    expect(firstCall[0]).toBe(
+      "https://api.semanticscholar.org/graph/v1/paper/PMID:123456/citations",
+    );
     expect(firstCall[1]).toMatchObject({
       fields:
         "contexts,intents,isInfluential,citingPaper.paperId,citingPaper.title,citingPaper.year,citingPaper.authors,citingPaper.venue,citingPaper.externalIds,citingPaper.publicationDate",
@@ -287,9 +289,7 @@ describe("external API contract alignment", () => {
   });
 
   it("fetches PubMed references with the pubmed_pubmed_refs ELink relation", async () => {
-    const getTextSpy = vi
-      .spyOn(defaultApiClient, "getText")
-      .mockResolvedValueOnce(`
+    const getTextSpy = vi.spyOn(defaultApiClient, "getText").mockResolvedValueOnce(`
         <eLinkResult>
           <LinkSet>
             <LinkSetDb>
@@ -297,8 +297,7 @@ describe("external API contract alignment", () => {
             </LinkSetDb>
           </LinkSet>
         </eLinkResult>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <PubmedArticleSet>
           <PubmedArticle>
             <MedlineCitation>
@@ -346,6 +345,7 @@ describe("external API contract alignment", () => {
   });
 
   it("selects and maps OpenAlex DOI from the Work top-level field", async () => {
+    vi.stubEnv("OPENALEX_API_KEY", "openalex-test-key");
     const getSpy = vi.spyOn(defaultApiClient, "get").mockResolvedValue({
       meta: { count: 1 },
       results: [
@@ -365,6 +365,9 @@ describe("external API contract alignment", () => {
     const result = await openalex.searchWorksAsync("openalex article", 1);
 
     const firstCall = getSpy.mock.calls[0]!;
+    expect(firstCall[1]).toMatchObject({
+      api_key: "openalex-test-key",
+    });
     expect(String(firstCall[1].select)).toContain("doi");
     expect(String(firstCall[1].select)).toContain("publication_date");
     expect(result.articles[0]?.doi).toBe("https://doi.org/10.5555/openalex");
@@ -372,6 +375,7 @@ describe("external API contract alignment", () => {
   });
 
   it("fetches OpenAlex work details through the DOI entity endpoint", async () => {
+    vi.stubEnv("OPENALEX_API_KEY", "openalex-test-key");
     const getSpy = vi.spyOn(defaultApiClient, "get").mockResolvedValue({
       id: "https://openalex.org/W123",
       doi: "https://doi.org/10.5555/openalex-detail",
@@ -389,6 +393,9 @@ describe("external API contract alignment", () => {
     expect(firstCall[0]).toBe(
       "https://api.openalex.org/works/https://doi.org/10.5555/openalex-detail",
     );
+    expect(firstCall[1]).toMatchObject({
+      api_key: "openalex-test-key",
+    });
     expect(String(firstCall[1].select)).toContain("doi");
     expect(result.article).toMatchObject({
       doi: "https://doi.org/10.5555/openalex-detail",
@@ -439,6 +446,7 @@ describe("external API contract alignment", () => {
   });
 
   it("reports OpenAlex citation total from meta.count rather than current page length", async () => {
+    vi.stubEnv("OPENALEX_API_KEY", "openalex-test-key");
     const getSpy = vi
       .spyOn(defaultApiClient, "get")
       .mockResolvedValueOnce({
@@ -464,6 +472,7 @@ describe("external API contract alignment", () => {
     expect(result.total_count).toBe(42);
     const citationCall = getSpy.mock.calls[1]!;
     expect(citationCall[1]).toMatchObject({
+      api_key: "openalex-test-key",
       filter: "cites:W123",
       per_page: 1,
     });
@@ -471,6 +480,7 @@ describe("external API contract alignment", () => {
   });
 
   it("queries OpenAlex Sources with official pagination and chooses exact journal matches", async () => {
+    vi.stubEnv("OPENALEX_API_KEY", "openalex-test-key");
     const getJsonSpy = vi.spyOn(defaultApiClient, "getJson").mockResolvedValue({
       results: [
         {
@@ -503,6 +513,7 @@ describe("external API contract alignment", () => {
     const firstCall = getJsonSpy.mock.calls[0]!;
     expect(firstCall[0]).toBe("https://api.openalex.org/sources");
     expect(firstCall[1]).toMatchObject({
+      api_key: "openalex-test-key",
       search: "Nature",
       filter: "type:journal",
       per_page: 5,
@@ -605,6 +616,68 @@ describe("external API contract alignment", () => {
 
     vi.stubEnv("ARXIV_RATE_LIMIT_MS", "1250");
     expect((arxiv as any).resolveRateLimitDelayMs()).toBe(1250);
+  });
+
+  it("builds arXiv query URLs with the official query-string separator", async () => {
+    const arxiv = new ArxivSearchService({
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    });
+    const getSpy = vi.fn().mockResolvedValue({
+      headers: { "content-type": "application/atom+xml" },
+      data: `
+        <feed xmlns="http://www.w3.org/2005/Atom">
+          <entry>
+            <id>http://arxiv.org/abs/2401.12345v1</id>
+            <title>Queryable Preprint</title>
+            <summary>Summary</summary>
+            <published>2024-01-15T12:30:00Z</published>
+            <author><name>Ada Lovelace</name></author>
+          </entry>
+        </feed>
+      `,
+    });
+    (arxiv as any).session = { get: getSpy };
+
+    await arxiv.search({
+      keyword: "machine learning",
+      max_results: 1,
+      use_cache: false,
+    });
+
+    expect(getSpy.mock.calls[0]![0]).toContain("https://export.arxiv.org/api/query?search_query=");
+  });
+
+  it("uses the higher NCBI API-key rate limit by default when configured", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NCBI_API_KEY", "ncbi-test-key");
+    const pubmed = new PubMedService({
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      log: vi.fn(),
+    } as unknown as Console);
+
+    expect((pubmed as any).resolveRateLimitDelayMs()).toBe(100);
+  });
+
+  it("returns a clear OpenAlex configuration error when the API key is missing", async () => {
+    const getSpy = vi.spyOn(defaultApiClient, "get");
+    const openalex = new OpenAlexService({
+      error: vi.fn(),
+      warn: vi.fn(),
+    });
+
+    const result = await openalex.searchWorksAsync("openalex article", 1, undefined, false);
+
+    expect(result).toMatchObject({
+      success: false,
+      articles: [],
+      source: "openalex",
+    });
+    expect(result.error).toContain("OPENALEX_API_KEY");
+    expect(getSpy).not.toHaveBeenCalled();
   });
 
   it("passes configured scholarly API identity parameters without hard-coded fake contacts", async () => {

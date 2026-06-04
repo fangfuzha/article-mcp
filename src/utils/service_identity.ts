@@ -56,15 +56,21 @@ export function addOpenAlexAuthParams(params: Record<string, unknown>): Record<s
   return apiKey ? { ...params, api_key: apiKey } : params;
 }
 
+export function getOpenAlexApiKey(): string | undefined {
+  return firstConfiguredValue("OPENALEX_API_KEY");
+}
+
+export function getOpenAlexMissingApiKeyMessage(): string {
+  return "OPENALEX_API_KEY 未设置。OpenAlex 当前要求 API key；请访问 https://openalex.org/account 获取并配置后再使用 OpenAlex 搜索、施引和期刊指标能力。";
+}
+
 export function buildCrossrefRequestOptions(): {
   params: Record<string, string>;
   headers: Record<string, string>;
 } {
   const mailto = firstConfiguredValue("CROSSREF_MAILTO", "ARTICLE_MCP_CONTACT_EMAIL");
   const headers: Record<string, string> = {
-    "User-Agent": isValidEmail(mailto)
-      ? `Article-MCP/2.0 (mailto:${mailto})`
-      : "Article-MCP/2.0",
+    "User-Agent": isValidEmail(mailto) ? `Article-MCP/2.0 (mailto:${mailto})` : "Article-MCP/2.0",
   };
 
   return {

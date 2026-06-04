@@ -196,8 +196,7 @@ export class EasyScholarService {
         let value: unknown = all_rank[api_field];
 
         if (
-          (internal_field === "impact_factor" ||
-            internal_field === "five_year_impact_factor") &&
+          (internal_field === "impact_factor" || internal_field === "five_year_impact_factor") &&
           value != null
         ) {
           const parsed = parseFloat(String(value));

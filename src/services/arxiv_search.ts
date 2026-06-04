@@ -208,162 +208,164 @@ export class ArxivSearchService {
       cacheKey,
       async () => {
         try {
-            // 构建基础查询
-            const searchQueryParts: string[] = [`all:${keyword.trim()}`];
+          // 构建基础查询
+          const searchQueryParts: string[] = [`all:${keyword.trim()}`];
 
-            // 处理日期参数
-            if (start_date || end_date) {
-              try {
-                const endDt = end_date ? this.parseDate(end_date) : new Date();
-                const startDt = start_date
-                  ? this.parseDate(start_date)
-                  : new Date(endDt.getFullYear() - 3, endDt.getMonth(), endDt.getDate());
+          // 处理日期参数
+          if (start_date || end_date) {
+            try {
+              const endDt = end_date ? this.parseDate(end_date) : new Date();
+              const startDt = start_date
+                ? this.parseDate(start_date)
+                : new Date(endDt.getFullYear() - 3, endDt.getMonth(), endDt.getDate());
 
-                if (startDt > endDt) {
-                  return {
-                    articles: [],
-                    total_count: 0,
-                    message: "起始时间不能晚于终止时间",
-                    error: "起始时间不能晚于终止时间",
-                  };
-                }
-
-                // 格式化为arXiv日期范围查询条件
-                const startStr = format(startDt, "yyyyMMdd") + "0000";
-                const endStr = format(endDt, "yyyyMMdd") + "2359";
-                const dateFilter = `submittedDate:[${startStr} TO ${endStr}]`;
-                searchQueryParts.push(dateFilter);
-              } catch (err) {
-                const error = err instanceof Error ? err : new Error(String(err));
+              if (startDt > endDt) {
                 return {
                   articles: [],
                   total_count: 0,
-                  message: `日期参数错误: ${error.message}`,
-                  error: `日期参数错误: ${error.message}`,
+                  message: "起始时间不能晚于终止时间",
+                  error: "起始时间不能晚于终止时间",
                 };
               }
-            }
 
-            // 组合查询字符串
-            const fullQuery = searchQueryParts.join(" AND ");
-            const encodedQuery = encodeURIComponent(fullQuery);
-
-            const articles: Record<string, any>[] = [];
-            let startIndex = 0;
-            const resultsPerPage = Math.min(100, max_results);
-
-            this.logger.info(`开始搜索 arXiv: ${keyword}`);
-
-            while (articles.length < max_results) {
-              const numToFetch = Math.min(resultsPerPage, max_results - articles.length);
-              if (numToFetch <= 0) break;
-
-              const url =
-                `${this.baseUrl}search_query=${encodedQuery}` +
-                `&start=${startIndex}` +
-                `&max_results=${numToFetch}` +
-                `&sortBy=submittedDate&sortOrder=descending`;
-
-              const headers = {
-                "User-Agent": email ? `Article-MCP/2.0 (contact: ${email})` : "Article-MCP/2.0",
+              // 格式化为arXiv日期范围查询条件
+              const startStr = format(startDt, "yyyyMMdd") + "0000";
+              const endStr = format(endDt, "yyyyMMdd") + "2359";
+              const dateFilter = `submittedDate:[${startStr} TO ${endStr}]`;
+              searchQueryParts.push(dateFilter);
+            } catch (err) {
+              const error = err instanceof Error ? err : new Error(String(err));
+              return {
+                articles: [],
+                total_count: 0,
+                message: `日期参数错误: ${error.message}`,
+                error: `日期参数错误: ${error.message}`,
               };
-
-              try {
-                const response = await this.rateLimiter.schedule(() =>
-                  this.session.get(url, { headers }),
-                );
-
-                const contentType = String(response.headers["content-type"] || "");
-                if (!contentType.includes("application/atom+xml")) {
-                  this.logger.error(`意外的响应内容类型: ${contentType}`);
-                  return {
-                    articles: [],
-                    total_count: 0,
-                    message: "arXiv API 返回了非预期的内容",
-                    error: "arXiv API 返回了非预期的内容",
-                  };
-                }
-
-                const xmlData = this.parser.parse(response.data);
-
-                const entries = xmlData?.feed?.entry || [];
-                const entryArray = Array.isArray(entries) ? entries : [entries];
-
-                if (!entryArray || entryArray.length === 0) {
-                  this.logger.info("arXiv API 返回了空结果页，停止获取");
-                  break;
-                }
-
-                for (const entry of entryArray) {
-                  if (articles.length >= max_results) break;
-
-                  // arXiv 错误响应：返回的 Atom entry 以 "Error" 为标题
-                  const entryTitle =
-                    (entry.title ?? entry["atom:title"] ?? entry["http://www.w3.org/2005/Atomtitle"]);
-                  if (typeof entryTitle === "string" && entryTitle.trim() === "Error") {
-                    const errorSummary =
-                      (entry.summary ?? entry["atom:summary"] ?? entry["http://www.w3.org/2005/Atomsummary"]);
-                    const errorMessage =
-                      typeof errorSummary === "string" ? errorSummary.trim() : entryTitle;
-                    this.logger.warn(`arXiv API 返回错误: ${errorMessage}`);
-                    break;
-                  }
-
-                  const articleInfo = this.processArxivEntry(entry);
-                  if (articleInfo) {
-                    articles.push(articleInfo);
-                  }
-                }
-
-                startIndex += entryArray.length;
-
-                if (entryArray.length < numToFetch) {
-                  this.logger.info("获取到的结果数少于请求数，认为是最后一页");
-                  break;
-                }
-              } catch (err) {
-                const error = err as { code?: string; message?: string };
-                if (
-                  error.code === "ECONNABORTED" ||
-                  (error.message && error.message.includes("timeout"))
-                ) {
-                  return {
-                    articles: [],
-                    total_count: 0,
-                    message: "请求 arXiv API 超时",
-                    error: "请求 arXiv API 超时",
-                  };
-                }
-                throw error;
-              }
             }
-
-            this.logger.info(`成功获取 ${articles.length} 篇 arXiv 文献`);
-
-            return {
-              articles,
-              total_count: articles.length,
-              message:
-                articles.length > 0
-                  ? `找到 ${articles.length} 篇相关文献`
-                  : "未找到与查询匹配的相关文献",
-              error: null,
-              search_info: {
-                keyword,
-                date_range: start_date || end_date ? `${start_date} 到 ${end_date}` : "无日期限制",
-                max_results,
-              },
-            };
-          } catch (err) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            this.logger.error(`arXiv 搜索失败: ${error.message}`);
-            return {
-              articles: [],
-              total_count: 0,
-              message: `网络请求错误: ${error.message}`,
-              error: `网络请求错误: ${error.message}`,
-            };
           }
+
+          // 组合查询字符串
+          const fullQuery = searchQueryParts.join(" AND ");
+          const encodedQuery = encodeURIComponent(fullQuery);
+
+          const articles: Record<string, any>[] = [];
+          let startIndex = 0;
+          const resultsPerPage = Math.min(100, max_results);
+
+          this.logger.info(`开始搜索 arXiv: ${keyword}`);
+
+          while (articles.length < max_results) {
+            const numToFetch = Math.min(resultsPerPage, max_results - articles.length);
+            if (numToFetch <= 0) break;
+
+            const url =
+              `${this.baseUrl}?search_query=${encodedQuery}` +
+              `&start=${startIndex}` +
+              `&max_results=${numToFetch}` +
+              `&sortBy=submittedDate&sortOrder=descending`;
+
+            const headers = {
+              "User-Agent": email ? `Article-MCP/2.0 (contact: ${email})` : "Article-MCP/2.0",
+            };
+
+            try {
+              const response = await this.rateLimiter.schedule(() =>
+                this.session.get(url, { headers }),
+              );
+
+              const contentType = String(response.headers["content-type"] || "");
+              if (!contentType.includes("application/atom+xml")) {
+                this.logger.error(`意外的响应内容类型: ${contentType}`);
+                return {
+                  articles: [],
+                  total_count: 0,
+                  message: "arXiv API 返回了非预期的内容",
+                  error: "arXiv API 返回了非预期的内容",
+                };
+              }
+
+              const xmlData = this.parser.parse(response.data);
+
+              const entries = xmlData?.feed?.entry || [];
+              const entryArray = Array.isArray(entries) ? entries : [entries];
+
+              if (!entryArray || entryArray.length === 0) {
+                this.logger.info("arXiv API 返回了空结果页，停止获取");
+                break;
+              }
+
+              for (const entry of entryArray) {
+                if (articles.length >= max_results) break;
+
+                // arXiv 错误响应：返回的 Atom entry 以 "Error" 为标题
+                const entryTitle =
+                  entry.title ?? entry["atom:title"] ?? entry["http://www.w3.org/2005/Atomtitle"];
+                if (typeof entryTitle === "string" && entryTitle.trim() === "Error") {
+                  const errorSummary =
+                    entry.summary ??
+                    entry["atom:summary"] ??
+                    entry["http://www.w3.org/2005/Atomsummary"];
+                  const errorMessage =
+                    typeof errorSummary === "string" ? errorSummary.trim() : entryTitle;
+                  this.logger.warn(`arXiv API 返回错误: ${errorMessage}`);
+                  break;
+                }
+
+                const articleInfo = this.processArxivEntry(entry);
+                if (articleInfo) {
+                  articles.push(articleInfo);
+                }
+              }
+
+              startIndex += entryArray.length;
+
+              if (entryArray.length < numToFetch) {
+                this.logger.info("获取到的结果数少于请求数，认为是最后一页");
+                break;
+              }
+            } catch (err) {
+              const error = err as { code?: string; message?: string };
+              if (
+                error.code === "ECONNABORTED" ||
+                (error.message && error.message.includes("timeout"))
+              ) {
+                return {
+                  articles: [],
+                  total_count: 0,
+                  message: "请求 arXiv API 超时",
+                  error: "请求 arXiv API 超时",
+                };
+              }
+              throw error;
+            }
+          }
+
+          this.logger.info(`成功获取 ${articles.length} 篇 arXiv 文献`);
+
+          return {
+            articles,
+            total_count: articles.length,
+            message:
+              articles.length > 0
+                ? `找到 ${articles.length} 篇相关文献`
+                : "未找到与查询匹配的相关文献",
+            error: null,
+            search_info: {
+              keyword,
+              date_range: start_date || end_date ? `${start_date} 到 ${end_date}` : "无日期限制",
+              max_results,
+            },
+          };
+        } catch (err) {
+          const error = err instanceof Error ? err : new Error(String(err));
+          this.logger.error(`arXiv 搜索失败: ${error.message}`);
+          return {
+            articles: [],
+            total_count: 0,
+            message: `网络请求错误: ${error.message}`,
+            error: `网络请求错误: ${error.message}`,
+          };
+        }
       },
       24,
       use_cache,

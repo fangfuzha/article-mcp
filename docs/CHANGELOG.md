@@ -2,6 +2,8 @@
 
 本文档记录 Article MCP Node 迁移版的主要变更。
 
+**主要用途**：Article MCP Node 迁移版主要用于学术文献与科研论文检索分析，尤其服务医学、生命科学和跨学科科研工作流，同时支持 arXiv 等通用预印本来源。
+
 ## 0.3.0 - 2026-06-04
 
 ### 新增
@@ -14,15 +16,26 @@
 
 ### 修复
 
+- 修复 arXiv 搜索 URL 缺少 `?search_query=` 分隔符的问题，真实请求现在对齐官方 API。
+- MCP Tool annotations 的 `openWorldHint` 改为 `true`，准确表达工具会访问外部学术数据源。
+- 业务失败结果现在设置 MCP `isError: true`，避免客户端把失败结果误判为成功调用。
 - arXiv API 由 HTTP 改为 HTTPS，避免每次请求经过 301 重定向。
 - arXiv 错误响应（`title="Error"`）不再被解析为有效文献条目。
 - `search_literature` 单个数据源失败不再阻塞其他源，改为「尽力而为」语义。
 - `get_journal_quality` 缓存命中时不再错误过滤掉 OpenAlex 指标。
+- `search_literature` now honors the requested `max_results` up to the documented 1-100 range instead of silently applying lower strategy caps.
+- Degraded search results with failed sources are no longer written to the aggregate 24-hour cache.
+- Tool error envelopes now keep `structuredContent.data: null` compatible with per-tool MCP `outputSchema` declarations.
+- `get_article_details` now returns complete full-text content in `fulltext.content` and keeps a bounded `fulltext.preview` for quick inspection.
+- `get_literature_relations` now rejects empty identifier requests and honors `sources` for citing lookups across OpenAlex and Europe PMC.
+- `get_journal_quality` now returns an explicit error when no EasyScholar or OpenAlex metrics are available.
 - `CrossRefService`、`OpenAlexService`、`OpenAlexMetricsService` 改用注入的 stdio-safe logger，不再直接写 console。
 - 修正多处 `error` 级别日志为 `info` 级别（正常操作日志）。
 
 ### 优化
 
+- OpenAlex 相关服务在缺少 `OPENALEX_API_KEY` 时返回明确配置错误，并新增默认 100ms 限流。
+- NCBI 请求默认限流会根据是否配置 API key 自动选择 100ms 或 333ms。
 - `CacheManager` 增加 1000 条容量上限，超出时淘汰过期/最旧条目，防止长时间运行内存无界增长。
 - `RateLimiter` 任务失败时也等待延迟（防止绕过限速），并新增队列积压告警。
 - `SearchCache` 改为原子写入（写临时文件再 rename），防止并发读取损坏。
