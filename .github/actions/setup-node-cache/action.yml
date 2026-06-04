@@ -1,0 +1,21 @@
+name: Setup Node.js with cache
+description: 安装指定 Node.js 版本并启用 npm 依赖缓存，统一各 CI 作业的环境配置。
+
+inputs:
+  node-version:
+    description: 要安装的 Node.js 版本
+    required: false
+    default: "22"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+
+    - name: Install dependencies
+      shell: bash
+      run: npm ci --prefer-offline --no-audit --no-fund
