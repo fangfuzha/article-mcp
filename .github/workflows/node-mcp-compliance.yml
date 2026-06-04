@@ -23,7 +23,7 @@ jobs:
         uses: ./.github/actions/setup-node-cache
 
       - name: Restore ESLint cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .cache/eslint
           key: ${{ runner.os }}-eslint-${{ hashFiles('package-lock.json', 'eslint.config.*', 'src/**/*.ts', 'tests/**/*.ts', 'scripts/**/*.ts') }}
@@ -71,7 +71,7 @@ jobs:
         run: npm run test:mcp
 
       - name: Upload compliance report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: node-mcp-compliance-report
