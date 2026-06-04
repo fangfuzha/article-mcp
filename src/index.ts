@@ -17,7 +17,7 @@ import { registerArticleMcpTools } from "./tools/index.js";
 config();
 
 export const SERVER_NAME = "article-mcp";
-export const SERVER_VERSION = "0.3.0";
+export const SERVER_VERSION = "0.3.1";
 export const CORE_TOOL_NAMES = [
   "search_literature",
   "get_article_details",
